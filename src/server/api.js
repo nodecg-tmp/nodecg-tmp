@@ -10,7 +10,7 @@ const utils = require('./util');
 const replicator = require('./replicator');
 const isError = require('is-error');
 const serializeError = require('serialize-error');
-const { version } = require('../package.json');
+const { version } = require('../../package.json');
 
 let io;
 

@@ -1,0 +1,9 @@
+{
+	"extends": "../../tsconfig_base.json",
+	"compilerOptions": {
+		"outDir": "../../build/client",
+		"rootDir": ".",
+		"module": "es2015"
+	},
+	"include": ["./**/*", "../types/**/*.d.ts"]
+}

@@ -1,6 +1,6 @@
 'use strict';
 
-const pjson = require('../../package.json');
+const pjson = require('../../../package.json');
 const configHelper = require('../config');
 const { config } = configHelper;
 global.exitOnUncaught = config.exitOnUncaught;
@@ -143,7 +143,7 @@ module.exports.start = function() {
 	app.use(
 		'/dashboard/*',
 		transformMiddleware({
-			rootDir: path.join(dashboardTransformRootDir, 'src'),
+			rootDir: path.join(dashboardTransformRootDir, 'build/client'),
 			modulesUrl: '/node_modules',
 		}),
 	);
@@ -314,7 +314,7 @@ module.exports.start = function() {
 	bundleManager.on('bundleRemoved', updateBundlesReplicant);
 	updateBundlesReplicant();
 
-	extensionManager = require('./extensions.js');
+	extensionManager = require('./extensions');
 	extensionManager.init();
 	module.exports.emit('extensionsLoaded');
 

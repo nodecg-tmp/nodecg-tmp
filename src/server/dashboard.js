@@ -16,9 +16,8 @@ const ncgUtils = require('./util/index');
 const ravenConfig = require('./util/raven-config');
 
 const app = express();
-const SRC_PATH = path.join(__dirname, '../src');
 const INSTRUMENTED_PATH = path.join(__dirname, '../instrumented');
-const BUILD_PATH = path.join(__dirname, '../build/src');
+const BUILD_PATH = path.join(__dirname, '../build/client');
 
 let dashboardContext = null;
 
@@ -37,7 +36,7 @@ app.get('/dashboard', ncgUtils.authCheck, (req, res) => {
 		dashboardContext = getDashboardContext();
 	}
 
-	res.render(path.join(__dirname, '../src/dashboard/dashboard.tmpl'), dashboardContext);
+	res.render(path.join(__dirname, '../client/dashboard/dashboard.tmpl'), dashboardContext);
 });
 
 app.get('/nodecg-api.min.js', (req, res) => {
@@ -70,6 +69,16 @@ if (process.env.NODECG_TEST) {
 	});
 }
 
+/**
+ * Not all of our files get copied to the BUILD_PATH.
+ * Specifically, anything that is not a *.js or *.ts file does not.
+ *
+ * We don't have a better build system right now, so our cheap fix
+ * is to just have a fallback which tries to find files in SRC_PATH
+ * if it couldn't find them in BUILD_PATH.
+ *
+ * This is probably bad for a lot of reasons and should be fixed.
+ */
 app.use('/', express.static(SRC_PATH));
 
 app.get('/bundles/:bundleName/dashboard/*', ncgUtils.authCheck, (req, res, next) => {

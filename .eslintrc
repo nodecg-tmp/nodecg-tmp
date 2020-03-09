@@ -1,7 +1,6 @@
 {
 	"root": true,
-	"extends": ["plugin:ava/recommended", "@gamesdonequick/eslint-config"],
-	"plugins": ["ava"],
+	"extends": ["@gamesdonequick/eslint-config", "@gamesdonequick/eslint-config/typescript"],
 	"rules": {
 		"new-cap": [
 			2,

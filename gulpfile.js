@@ -79,11 +79,13 @@ function buh({ instrument } = {}) {
 		.pipe(buffer())
 		.pipe(
 			transform(() => {
-				return exorcist(instrument ? 'instrumented/nodecg-api.min.js.map' : 'build/src/nodecg-api.min.js.map');
+				return exorcist(
+					instrument ? 'instrumented/nodecg-api.min.js.map' : 'build/client/nodecg-api.min.js.map',
+				);
 			}),
 		)
 		.on('error', gutil.log)
-		.pipe(gulp.dest(instrument ? 'instrumented' : 'build/src'));
+		.pipe(gulp.dest(instrument ? 'instrumented' : 'build/client'));
 }
 
 exports.clean = clean;

@@ -3,7 +3,7 @@
 // Ours
 const bundleManager = require('../bundle-manager');
 const configHelper = require('../config');
-const pjson = require('../../package.json');
+const pjson = require('../../../package.json');
 
 const { config } = configHelper;
 const ravenConfigExtra = {};

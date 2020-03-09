@@ -50,7 +50,7 @@ export const setup = () => {
 
 			const newCoverageObj = {};
 			for (const key of Object.keys(coverageObj)) {
-				const absKey = path.resolve('src', key);
+				const absKey = path.resolve('src/client', key);
 				coverageObj[key].path = absKey;
 				newCoverageObj[absKey] = coverageObj[key];
 			}
