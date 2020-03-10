@@ -131,25 +131,7 @@ module.exports.start = function() {
 
 	const bundlesPaths = [path.join(process.env.NODECG_ROOT, 'bundles')].concat(config.bundles.paths);
 	const cfgPath = path.join(process.env.NODECG_ROOT, 'cfg');
-	const dashboardTransformRootDir = path.resolve(__dirname, '../..');
-	app.use(
-		'/node_modules/*',
-		transformMiddleware({
-			rootDir: path.join(dashboardTransformRootDir, 'node_modules'),
-			modulesUrl: '/node_modules',
-		}),
-	);
-
-	app.use(
-		'/dashboard/*',
-		transformMiddleware({
-			rootDir: path.join(dashboardTransformRootDir, 'build/client'),
-			modulesUrl: '/node_modules',
-		}),
-	);
-
 	bundleManager.init(bundlesPaths, cfgPath, pjson.version, config, Logger);
-
 	bundleManager.all().forEach(bundle => {
 		if (bundle.transformBareModuleSpecifiers) {
 			const opts = {
