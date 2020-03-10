@@ -5,11 +5,5 @@
 		"rootDir": ".",
 		"module": "commonjs"
 	},
-	"include": [, "../client/api/logger/browser.js"
-		"./**/*",
-		"../types/**/*.d.ts",
-		"../client/api/config.js",
-		"../client/api/replicant.js",
-		"../client/api/logger.js"
-	]
+	"include": ["./**/*", "../types/**/*.d.ts"]
 }
