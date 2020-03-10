@@ -44,36 +44,14 @@
 			}
 		</script>
 
-		<!-- other dashboard scripts -->
-		<script src="/node_modules/draggabilly/dist/draggabilly.pkgd.min.js" async></script>
-		<script src="/node_modules/iframe-resizer/js/iframeResizer.min.js" async></script>
-		<script src="/node_modules/packery/dist/packery.pkgd.min.js"></script>
-		<script src="/node_modules/clipboard/dist/clipboard.min.js"></script>
-		<script src="/node_modules/@webcomponents/webcomponentsjs/webcomponents-loader.js"></script>
-		<script src="/node_modules/@webcomponents/shadycss/apply-shim.min.js"></script>
-
 		<!-- our custom dashboard elements -->
-		<script type="module" src="elements/ncg-dashboard.js"></script>
+		<script src="/dashboard.js"></script>
 
 		<!-- make the API available -->
-		<script src="/nodecg-api.min.js"></script>
+		<script src="/api.js"></script>
 
 		<!-- initialize the socket -->
-		<script src="/node_modules/cookies-js/dist/cookies.min.js"></script>
-		<script src="/socket.io/socket.io.js"></script>
-		<script type="text/javascript">
-			const params = new URLSearchParams(location.search);
-			window.token = params.key || Cookies.get('socketToken');
-			if (window.token) {
-				window.socket = io(undefined, {
-					query: {
-						token: window.token
-					}
-				});
-			} else {
-				window.socket = io();
-			}
-		</script>
+		<script src="/socket.js"></script>
 		<custom-style>
 			<style>
 				body {

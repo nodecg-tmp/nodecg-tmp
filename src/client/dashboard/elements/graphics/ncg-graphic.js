@@ -6,6 +6,7 @@ import '@polymer/paper-button/paper-button.js';
 import './ncg-graphic-instance.js';
 import * as Polymer from '@polymer/polymer';
 import { MutableData } from '@polymer/polymer/lib/mixins/mutable-data';
+import Clipboard from 'clipboard'
 
 /**
  * @customElement
@@ -270,7 +271,7 @@ class NcgGraphic extends MutableData(Polymer.PolymerElement) {
 	ready() {
 		super.ready();
 
-		const clipboard = new window.ClipboardJS(this.$.copyButton);
+		const clipboard = new Clipboard(this.$.copyButton);
 		this._initClipboard(clipboard);
 	}
 

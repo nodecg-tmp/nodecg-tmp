@@ -1,9 +1,11 @@
 {
 	"extends": "../../tsconfig_base.json",
 	"compilerOptions": {
-		"outDir": "../../build/client",
-		"rootDir": ".",
-		"module": "es2015"
+		"noEmit": true,
+		"target": "ESNext",
+		"module": "ESNext",
+		"esModuleInterop": false,
+		"allowSyntheticDefaultImports": true
 	},
-	"include": ["./**/*", "../types/**/*.d.ts"]
+	"include": ["./**/*.ts", "./**/*.js"]
 }

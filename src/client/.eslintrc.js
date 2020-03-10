@@ -5,9 +5,6 @@ module.exports = {
 	},
 	globals: {
 		NodeCG: true,
-		Clipboard: true,
-		Packery: true,
-		Draggabilly: true,
 	},
 	parserOptions: {
 		project: './tsconfig.json',

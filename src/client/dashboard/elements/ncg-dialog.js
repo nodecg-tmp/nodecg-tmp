@@ -15,6 +15,7 @@ import '@polymer/paper-dialog-behavior/paper-dialog-shared-styles.js';
 import { afterNextRender } from '@polymer/polymer/lib/utils/render-status.js';
 import { mixinBehaviors } from '@polymer/polymer/lib/legacy/class.js';
 import * as Polymer from '@polymer/polymer';
+import {iframeResizer} from 'iframe-resizer'
 /* global Raven */
 class NcgDialog extends mixinBehaviors([NeonAnimationRunnerBehavior, PaperDialogBehavior], Polymer.PolymerElement) {
 	static get template() {
@@ -141,7 +142,7 @@ class NcgDialog extends mixinBehaviors([NeonAnimationRunnerBehavior, PaperDialog
 	}
 
 	_attachIframeResize(iframe) {
-		window.iFrameResize(
+		iframeResizer(
 			{
 				log: false,
 				resizeFrom: 'child',

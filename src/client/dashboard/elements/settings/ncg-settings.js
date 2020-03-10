@@ -5,6 +5,7 @@ import '@polymer/paper-card/paper-card.js';
 import '@polymer/paper-dialog/paper-dialog.js';
 import '@polymer/paper-toast/paper-toast.js';
 import * as Polymer from '@polymer/polymer';
+import Clipboard from 'clipboard'
 class NcgSettings extends Polymer.PolymerElement {
 	static get template() {
 		return Polymer.html`
@@ -123,7 +124,7 @@ class NcgSettings extends Polymer.PolymerElement {
 			this.$.copyKey.setAttribute('data-clipboard-text', window.token);
 		}
 
-		const clipboard = new window.ClipboardJS(this.$.copyKey);
+		const clipboard = new Clipboard(this.$.copyKey);
 		clipboard.on(
 			'success',
 			/* istanbul ignore next: hard to test clipboard things */ () => {
