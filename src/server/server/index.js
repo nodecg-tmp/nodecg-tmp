@@ -133,6 +133,8 @@ module.exports.start = function() {
 	const cfgPath = path.join(process.env.NODECG_ROOT, 'cfg');
 	bundleManager.init(bundlesPaths, cfgPath, pjson.version, config, Logger);
 	bundleManager.all().forEach(bundle => {
+		// TODO: deprecate this feature once Import Maps are shipped and stable in browsers.
+		// TODO: remove this feature after Import Maps have been around a while (like a year maybe).
 		if (bundle.transformBareModuleSpecifiers) {
 			const opts = {
 				rootDir: process.env.NODECG_ROOT,
