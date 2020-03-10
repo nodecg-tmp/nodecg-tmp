@@ -5,7 +5,7 @@
 const EventEmitter = require('events');
 const equal = require('deep-equal');
 const clone = require('clone');
-const shared = require('../replicant/shared');
+const shared = require('../../server/replicant/shared');
 const declaredReplicants = {};
 
 const REPLICANT_HANDLER = {

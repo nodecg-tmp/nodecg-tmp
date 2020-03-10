@@ -3,9 +3,9 @@
 
 let Logger;
 if (window.ncgConfig.sentry.enabled) {
-	Logger = require('../logger/browser')(window.ncgConfig.logging, window.Raven);
+	Logger = require('./logger-client')(window.ncgConfig.logging, window.Raven);
 } else {
-	Logger = require('../logger/browser')(window.ncgConfig.logging);
+	Logger = require('./logger-client')(window.ncgConfig.logging);
 }
 
 module.exports = function(name) {
