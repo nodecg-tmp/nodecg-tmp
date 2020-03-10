@@ -52,16 +52,16 @@
 
 		<!-- initialize the socket -->
 		<script src="/socket.js"></script>
-		<custom-style>
-			<style>
-				body {
-					overflow: hidden;
-					background-color: #232C3D;
-					@apply(--layout-vertical);
-					@apply(--layout-fullbleed);
-				}
-			</style>
-		</custom-style>
+		<style>
+			body {
+				overflow: hidden;
+				background-color: #232C3D;
+				display: flex;
+				flex-direction: column;
+				margin: 0;
+				height: 100vh;
+			}
+		</style>
 	</head>
 	<body>
 		<ncg-dashboard id="nodecg_dashboard"></ncg-dashboard>
