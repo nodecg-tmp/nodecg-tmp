@@ -10,7 +10,7 @@ const semver = require('semver');
 // Ours
 const bundles = require('../bundle-manager');
 const { config, filteredConfig } = require('../config');
-const ravenConfig = require('./raven-config');
+const ravenConfig = require('./sentry-config');
 
 /**
  * Injects the appropriate assets into a panel, dialog, or graphic.

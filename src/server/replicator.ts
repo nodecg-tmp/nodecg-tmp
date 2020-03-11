@@ -1,11 +1,16 @@
-'use strict';
+// Native
+import * as path from 'path';
 
-const path = require('path');
-const fs = require('fs.extra');
-const clone = require('clone');
-const log = require('./logger')('replicator');
-const server = require('./server');
-const shared = require('./replicant/shared');
+// Packages
+import * as fs from 'fs-extra';
+import clone from 'clone';
+
+// Ours
+import createLogger from './logger';
+import server from './server';
+import * as shared from './replicant/shared';
+
+const log = createLogger('replicator');
 const REPLICANTS_ROOT = path.join(process.env.NODECG_ROOT, 'db/replicants');
 const io = server.getIO();
 const declaredReplicants = {};

@@ -250,14 +250,7 @@ module.exports = function(userCfgPath) {
 				default: false,
 			},
 			dsn: {
-				doc: 'Your private DSN, for server-side error reporting.',
-				format: String,
-
-				// This will throw if the user does not provide a value, but only if Sentry is enabled.
-				default: userConfig.sentry && userConfig.sentry.enabled ? null : '',
-			},
-			publicDsn: {
-				doc: 'Your public sentry DSN, for browser error reporting.',
+				doc: "Your project's DSN, used to route alerts to the correct place.",
 				format: String,
 
 				// This will throw if the user does not provide a value, but only if Sentry is enabled.

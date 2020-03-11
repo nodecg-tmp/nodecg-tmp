@@ -1,60 +1,73 @@
-'use strict';
+// Minimal imports for first setup
+import * as os from 'os';
+import * as Sentry from '@sentry/node';
+import configHelper from '../config';
+import '../util/sentry-config';
 
+// eslint-disable-next-line @typescript-eslint/no-var-requires
 const pjson = require('../../../package.json');
-const configHelper = require('../config');
 const { config } = configHelper;
 global.exitOnUncaught = config.exitOnUncaught;
-
-const Raven = require('raven');
-const ravenConfig = require('../util/raven-config');
 if (config.sentry && config.sentry.enabled) {
-	Raven.config(config.sentry.dsn, ravenConfig).install();
+	Sentry.init({
+		dsn: config.sentry.dsn,
+		serverName: os.hostname(),
+		release: pjson.version,
+	});
+	Sentry.configureScope(scope => {
+		scope.setTags({
+			nodecgHost: config.host,
+			nodecgBaseURL: config.baseURL,
+		});
+	});
 	global.sentryEnabled = true;
 
 	process.on('unhandledRejection', (reason, p) => {
 		console.error('Unhandled Rejection at:', p, 'reason:', reason);
-		Raven.captureException(reason);
+		Sentry.captureException(reason);
 	});
 
 	console.info('[nodecg] Sentry enabled.');
 }
 
 // Native
-const { EventEmitter } = require('events');
-const fs = require('fs');
-const path = require('path');
+import { EventEmitter } from 'events';
+import fs = require('fs');
+import path = require('path');
 
 // Packages
-const bodyParser = require('body-parser');
-const clone = require('clone');
-const debounce = require('lodash.debounce');
-const express = require('express');
-const fetch = require('make-fetch-happen');
-const semver = require('semver');
-const template = require('lodash.template');
-const memoize = require('fast-memoize');
-const transformMiddleware = require('express-transform-bare-module-specifiers').default;
+import bodyParser from 'body-parser';
+import clone from 'clone';
+import debounce from 'lodash.debounce';
+import express from 'express';
+import fetch from 'make-fetch-happen';
+import semver from 'semver';
+import template from 'lodash.template';
+import memoize from 'fast-memoize';
+import transformMiddleware from 'express-transform-bare-module-specifiers';
+import socketIo from 'socket.io';
+import compression from 'compression';
+import { Express as ExpressType } from 'express-serve-static-core';
 
 // Ours
-const bundleManager = require('../bundle-manager');
-const Logger = require('../logger');
-const tokens = require('../login/tokens');
-const UnauthorizedError = require('../login/UnauthorizedError');
+import bundleManager = require('../bundle-manager');
+import createLogger from '../logger';
+import tokens from '../login/tokens';
+import UnauthorizedError from '../login/UnauthorizedError';
+import { Server } from 'http';
 
-const log = new Logger('nodecg/lib/server');
+const log = createLogger('nodecg/lib/server');
 const authorizedSockets = {};
-let app;
-let server;
-let io;
+let app: ExpressType;
+let server: Server;
+let io: SocketIO.Server;
 let extensionManager;
 
 // Check for updates
 fetch('http://registry.npmjs.org/nodecg/latest')
-	.then(res => {
-		return res.json(); // Download the body as JSON
-	})
-	.then(body => {
-		if (semver.gt(body.version, pjson.version) >= 1) {
+	.then((res: any) => res.json())
+	.then((body: any) => {
+		if (semver.gt(body.version, pjson.version)) {
 			log.warn('An update is available for NodeCG: %s (current: %s)', JSON.parse(body).version, pjson.version);
 		}
 	})
@@ -68,17 +81,17 @@ const renderTemplate = memoize((content, options) => {
 	return template(content)(options);
 });
 
-module.exports = new EventEmitter();
+const emitter = new EventEmitter();
+export default emitter;
 
-module.exports.start = function() {
+export function start() {
 	log.info('Starting NodeCG %s (Running on Node.js %s)', pjson.version, process.version);
 
 	// (Re)create Express app, HTTP(S) & Socket.IO servers
 	app = express();
 
 	if (global.sentryEnabled) {
-		app.use(Raven.requestHandler());
-		app.use(Raven.errorHandler());
+		app.use(Sentry.Handlers.requestHandler());
 	}
 
 	if (config.ssl && config.ssl.enabled) {
@@ -99,12 +112,12 @@ module.exports.start = function() {
 		server = require('http').createServer(app);
 	}
 
-	io = require('socket.io')(server);
+	io = socketIo(server);
 	io.sockets.setMaxListeners(64); // Prevent console warnings when many extensions are installed
 
 	// Set up Express
 	log.trace('Setting up Express');
-	app.use(require('compression')());
+	app.use(compression());
 	app.use(bodyParser.json());
 	app.use(bodyParser.urlencoded({ extended: true }));
 
@@ -146,7 +159,7 @@ module.exports.start = function() {
 
 	io.on('error', err => {
 		if (global.sentryEnabled) {
-			Raven.captureException(err);
+			Sentry.captureException(err);
 		}
 
 		log.error(err.stack);
@@ -157,7 +170,7 @@ module.exports.start = function() {
 
 		socket.on('error', err => {
 			if (global.sentryEnabled) {
-				Raven.captureException(err);
+				Sentry.captureException(err);
 			}
 
 			log.error(err.stack);
@@ -256,7 +269,7 @@ module.exports.start = function() {
 				break;
 		}
 
-		module.exports.emit('error', err);
+		emitter.emit('error', err);
 	});
 
 	log.trace('Starting graphics lib');
@@ -283,6 +296,23 @@ module.exports.start = function() {
 	const sharedSources = require('../shared-sources');
 	app.use(sharedSources);
 
+	if (global.sentryEnabled) {
+		app.use(Sentry.Handlers.errorHandler());
+	}
+
+	// Fallthrough error handler,
+	// Taken from https://docs.sentry.io/platforms/node/express/
+	app.use((_, res) => {
+		res.statusCode = 500;
+		if (global.sentryEnabled) {
+			// The error id is attached to `res.sentry` to be returned
+			// and optionally displayed to the user for support.
+			res.end(`${String((res as any).sentry)}\n`);
+		} else {
+			res.end('Internal error');
+		}
+	});
+
 	// Set up "bundles" Replicant.
 	const Replicant = require('../replicant');
 	const bundlesReplicant = new Replicant('bundles', 'nodecg', {
@@ -300,7 +330,7 @@ module.exports.start = function() {
 
 	extensionManager = require('./extensions');
 	extensionManager.init();
-	module.exports.emit('extensionsLoaded');
+	emitter.emit('extensionsLoaded');
 
 	// We intentionally wait until all bundles and extensions are loaded before starting the server.
 	// This has two benefits:
@@ -322,12 +352,12 @@ module.exports.start = function() {
 
 			const protocol = config.ssl && config.ssl.enabled ? 'https' : 'http';
 			log.info('NodeCG running on %s://%s', protocol, config.baseURL);
-			module.exports.emit('started');
+			emitter.emit('started');
 		},
 	);
-};
+}
 
-module.exports.stop = function() {
+export function stop(): void {
 	if (server) {
 		server.close();
 	}
@@ -343,10 +373,10 @@ module.exports.stop = function() {
 	server = null;
 	app = null;
 
-	module.exports.emit('stopped');
-};
+	emitter.emit('stopped');
+}
 
-module.exports.getExtensions = function() {
+export function getExtensions() {
 	/* istanbul ignore else */
 	if (extensionManager) {
 		return extensionManager.getExtensions();
@@ -354,12 +384,12 @@ module.exports.getExtensions = function() {
 
 	/* istanbul ignore next */
 	return {};
-};
+}
 
-module.exports.getIO = function() {
+export function getIO(): SocketIO.Server {
 	return io;
-};
+}
 
-module.exports.mount = function(...args) {
+export function mount(...args): void {
 	app.use(...args);
-};
+}

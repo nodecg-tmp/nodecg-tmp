@@ -1,30 +1,50 @@
-'use strict';
+// Native
+import * as path from 'path';
+import { format, inspect } from 'util';
 
-const path = require('path');
-const { format, inspect } = require('util');
-const fs = require('fs.extra');
-const winston = require('winston');
+// Packages
+import * as fs from 'fs-extra';
+import winston from 'winston';
+import * as Sentry from '@sentry/node';
+
+const enum LogLevel {
+	Trace = 'verbose',
+	Debug = 'debug',
+	Info = 'info',
+	Warn = 'warn',
+	Error = 'error',
+}
+
+type LoggerOptions = {
+	console: {
+		enabled: boolean;
+		level: LogLevel;
+	};
+	file: {
+		enabled: boolean;
+		level: LogLevel;
+		path: string;
+	};
+	replicants: boolean;
+};
+
+export interface LoggerInterface {
+	name: string;
+	trace: (...args: any[]) => void;
+	debug: (...args: any[]) => void;
+	info: (...args: any[]) => void;
+	warn: (...args: any[]) => void;
+	error: (...args: any[]) => void;
+	replicants: (...args: any[]) => void;
+}
 
 /**
  * A factory that configures and returns a Logger constructor.
- * @param [initialOpts] {Object} - Configuration for the logger.
  *
- * @param [initialOpts.console] {Object} - Configuration for the console logging.
- * @param [initialOpts.console.enabled=false] {Boolean} - Whether to enable console logging.
- * @param [initialOpts.console.level="info"] {ENUM_LEVELS} - The level of logging to output to the console.
- *
- * @param [initialOpts.file] {Object} - Configuration for file logging.
- * @param initialOpts.file.path {String} - Where the log file should be saved.
- * @param [initialOpts.file.enabled=false] {Boolean} - Whether to enable file logging.
- * @param [initialOpts.file.level="info"] {ENUM_LEVELS} - The level of logging to output to file.
- *
- * @param [initialOpts.replicants=false] {Boolean} - Whether to enable logging specifically for the Replicants system.
- *
- * @param [Raven] {Object} - A pre-configured server-side Raven npm package instance, for reporting errors to Sentry.io
- *
- * @returns {function} - A constructor used to create discrete logger instances.
+ * @returns A constructor used to create discrete logger instances.
  */
-module.exports = function(initialOpts, Raven) {
+// eslint-disable-next-line @typescript-eslint/explicit-function-return-type
+export default function(initialOpts: LoggerOptions, sentry?: typeof Sentry) {
 	initialOpts = initialOpts || {};
 	initialOpts.console = initialOpts.console || {};
 	initialOpts.file = initialOpts.file || {};
@@ -49,7 +69,7 @@ module.exports = function(initialOpts, Raven) {
 	});
 
 	winston.addColors({
-		trace: 'green',
+		verbose: 'green',
 		debug: 'cyan',
 		info: 'white',
 		warn: 'yellow',
@@ -59,6 +79,7 @@ module.exports = function(initialOpts, Raven) {
 	const mainLogger = new winston.Logger({
 		transports: [consoleTransport, fileTransport],
 		levels: {
+			verbose: 4,
 			trace: 4,
 			debug: 3,
 			info: 2,
@@ -73,64 +94,66 @@ module.exports = function(initialOpts, Raven) {
 	 * @returns {Object} - A Logger instance.
 	 * @constructor
 	 */
-	class Logger {
-		constructor(name) {
+	class Logger implements LoggerInterface {
+		static readonly _winston = mainLogger;
+
+		// A messy bit of internal state used to determine if the special-case "replicants" logging level is active.
+		static _shouldLogReplicants = Boolean(initialOpts.replicants);
+
+		name: string;
+
+		constructor(name: string) {
 			this.name = name;
 		}
 
-		trace(...args) {
-			mainLogger.trace(`[${this.name}] ${args[0]}`, ...args.slice(1));
+		static globalReconfigure(opts: LoggerOptions): void {
+			_configure(opts);
 		}
 
-		debug(...args) {
-			mainLogger.debug(`[${this.name}] ${args[0]}`, ...args.slice(1));
+		trace(...args: any[]): void {
+			mainLogger.verbose(`[${this.name}]`, ...args);
 		}
 
-		info(...args) {
-			mainLogger.info(`[${this.name}] ${args[0]}`, ...args.slice(1));
+		debug(...args: any[]): void {
+			mainLogger.debug(`[${this.name}]`, ...args);
 		}
 
-		warn(...args) {
-			mainLogger.warn(`[${this.name}] ${args[0]}`, ...args.slice(1));
+		info(...args: any[]): void {
+			mainLogger.info(`[${this.name}]`, ...args);
 		}
 
-		error(...args) {
-			mainLogger.error(`[${this.name}] ${args[0]}`, ...args.slice(1));
+		warn(...args: any[]): void {
+			mainLogger.warn(`[${this.name}]`, ...args);
+		}
 
-			if (Raven) {
+		error(...args: any[]): void {
+			mainLogger.error(`[${this.name}]`, ...args);
+
+			if (sentry) {
 				const formattedArgs = args.map(argument => {
 					return typeof argument === 'object'
 						? inspect(argument, { depth: null, showProxy: true })
 						: argument;
 				});
 
-				Raven.captureException(new Error(`[${this.name}] ` + format(...formattedArgs)), {
-					logger: 'server @nodecg/logger',
-				});
+				sentry.captureException(
+					new Error(`[${this.name}] ` + format(formattedArgs[0], ...formattedArgs.slice(1))),
+				);
 			}
 		}
 
-		replicants(...args) {
+		replicants(...args: any[]): void {
 			if (!Logger._shouldLogReplicants) {
 				return;
 			}
 
-			mainLogger.info(`[${this.name}] ${args[0]}`, ...args.slice(1));
-		}
-
-		static globalReconfigure(opts) {
-			_configure(opts);
+			mainLogger.info(`[${this.name}]`, ...args.slice(1));
 		}
 	}
 
-	Logger._winston = mainLogger;
-
-	// A messy bit of internal state used to determine if the special-case "replicants" logging level is active.
-	Logger._shouldLogReplicants = Boolean(initialOpts.replicants);
-
 	_configure(initialOpts);
 
-	function _configure(opts) {
+	function _configure(opts: LoggerOptions): void {
 		// Initialize opts with empty objects, if nothing was provided.
 		opts = opts || {};
 		opts.console = opts.console || {};
@@ -153,7 +176,8 @@ module.exports = function(initialOpts, Raven) {
 		}
 
 		if (typeof opts.file.path !== 'undefined') {
-			fileTransport.filename = opts.file.path;
+			// TODO: I think this typedef is wrong. Re-evaluate after upgrading to Winston 3.
+			(fileTransport as any).filename = opts.file.path;
 
 			// Make logs folder if it does not exist.
 			if (!fs.existsSync(path.dirname(opts.file.path))) {
@@ -166,5 +190,6 @@ module.exports = function(initialOpts, Raven) {
 		}
 	}
 
-	return Logger;
-};
+	const typedExport: new (name: string) => LoggerInterface = Logger;
+	return typedExport;
+}

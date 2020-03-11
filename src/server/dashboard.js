@@ -13,7 +13,7 @@ const bundles = require('./bundle-manager');
 const configHelper = require('./config/index');
 const log = require('./logger')('nodecg/lib/dashboard');
 const ncgUtils = require('./util/index');
-const ravenConfig = require('./util/raven-config');
+const ravenConfig = require('./util/sentry-config');
 
 const app = express();
 const INSTRUMENTED_PATH = path.join(__dirname, '../instrumented');

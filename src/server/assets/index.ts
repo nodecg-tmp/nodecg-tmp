@@ -1,26 +1,31 @@
-'use strict';
-
 // Native
-const fs = require('fs');
-const path = require('path');
+import * as fs from 'fs';
+import * as path from 'path';
 
 // Packages
-const app = require('express')();
-const chokidar = require('chokidar');
-const multer = require('multer');
-const sha1File = require('sha1-file');
+import express from 'express';
+import chokidar from 'chokidar';
+import multer from 'multer';
+import sha1File from 'sha1-file';
 
 // Ours
-const AssetFile = require('./AssetFile');
-const { authCheck, debounceName } = require('../util');
-const bundles = require('../bundle-manager');
-const log = require('../logger')('nodecg/lib/assets');
-const Replicant = require('../replicant');
+import AssetFile from './AssetFile';
+import { authCheck, debounceName } from '../util';
+import bundles from '../bundle-manager';
+import createLogger from '../logger';
+import Replicant from '../replicant';
 
+type Collection = {
+	name: string;
+	categories: string[];
+};
+
+const log = createLogger('nodecg/lib/assets');
+const app = express();
 const ASSETS_ROOT = path.join(process.env.NODECG_ROOT, 'assets');
 const collectionsRep = new Replicant('collections', '_assets', { defaultValue: [], persistent: false });
 const replicantsByNamespace = {};
-const watchPatterns = [];
+const watchPatterns: string[] = [];
 const upload = multer({
 	storage: multer.diskStorage({
 		destination: ASSETS_ROOT,
@@ -32,7 +37,7 @@ const upload = multer({
 let _ready = false;
 let _deferredFiles = new Map();
 
-const collections = [];
+const collections: Collection[] = [];
 
 // Create ASSETS_ROOT folder if it does not exist.
 /* istanbul ignore next: Simple directory creation. */

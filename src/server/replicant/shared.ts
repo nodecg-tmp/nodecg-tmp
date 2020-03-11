@@ -1,23 +1,57 @@
 // This file contains code that is used in both server-side and client-side replicants.
-'use strict';
+/* eslint-disable @typescript-eslint/no-dynamic-delete */
+// Packages
+import validator from 'is-my-json-valid';
+import clone from 'clone';
+import objectPath from 'object-path';
 
-const validator = require('is-my-json-valid');
-const clone = require('clone');
-const objectPath = require('object-path');
+type Metadata = {
+	replicant: Replicant;
+	path: string;
+	proxy: unknown;
+};
+
+export type Operation<T> = {
+	path: string;
+} & (
+	| { method: 'overwrite'; args: { newValue: T | undefined } }
+	| { method: 'delete'; args: { prop: keyof T } }
+	| { method: 'add'; args: { prop: string; newValue: any } }
+	| { method: 'update'; args: { prop: string; newValue: any } }
+);
+
+export type Options<T> = { persistent?: boolean; persistenceInterval?: number; schemaPath?: string; defaultValue?: T };
+
+export type Validator = (newValue: any, opts: { throwOnInvalid?: boolean }) => boolean;
+
 const proxyMetadataMap = new WeakMap();
-const metadataMap = new WeakMap();
+const metadataMap = new WeakMap<any, Metadata>();
 const proxySet = new WeakSet();
 
-const ARRAY_MUTATOR_METHODS = ['copyWithin', 'fill', 'pop', 'push', 'reverse', 'shift', 'sort', 'splice', 'unshift'];
+export const ARRAY_MUTATOR_METHODS = [
+	'copyWithin',
+	'fill',
+	'pop',
+	'push',
+	'reverse',
+	'shift',
+	'sort',
+	'splice',
+	'unshift',
+];
 
 /**
  * The default persistence interval, in milliseconds.
  * @type {Number}
  */
-const DEFAULT_PERSISTENCE_INTERVAL = 100;
+export const DEFAULT_PERSISTENCE_INTERVAL = 100;
 
-const deleteTrap = function(target, prop) {
+const deleteTrap = function<T>(target: T, prop: keyof T): boolean | void {
 	const metadata = metadataMap.get(target);
+	if (!metadata) {
+		throw new Error('arrived at delete trap without any metadata');
+	}
+
 	const { replicant } = metadata;
 
 	if (replicant._ignoreProxy) {
@@ -43,8 +77,12 @@ const deleteTrap = function(target, prop) {
 };
 
 const CHILD_ARRAY_HANDLER = {
-	get(target, prop) {
+	get<T>(target: T, prop: keyof T) {
 		const metadata = metadataMap.get(target);
+		if (!metadata) {
+			throw new Error('arrived at get trap without any metadata');
+		}
+
 		const { replicant } = metadata;
 		if (metadata.replicant._ignoreProxy) {
 			return target[prop];
@@ -84,12 +122,16 @@ const CHILD_ARRAY_HANDLER = {
 		return target[prop];
 	},
 
-	set(target, prop, newValue) {
+	set<T>(target: T, prop: keyof T, newValue: any) {
 		if (target[prop] === newValue) {
 			return true;
 		}
 
 		const metadata = metadataMap.get(target);
+		if (!metadata) {
+			throw new Error('arrived at set trap without any metadata');
+		}
+
 		const { replicant } = metadata;
 
 		if (replicant._ignoreProxy) {
@@ -150,6 +192,10 @@ const CHILD_OBJECT_HANDLER = {
 		}
 
 		const metadata = metadataMap.get(target);
+		if (!metadata) {
+			throw new Error('arrived at set trap without any metadata');
+		}
+
 		const { replicant } = metadata;
 
 		if (replicant._ignoreProxy) {
@@ -188,115 +234,109 @@ const CHILD_OBJECT_HANDLER = {
 	deleteProperty: deleteTrap,
 };
 
-module.exports = {
-	ARRAY_MUTATOR_METHODS,
-	DEFAULT_PERSISTENCE_INTERVAL,
-	_proxyRecursive: proxyRecursive,
+/**
+ * If the operation is an array mutator method, call it on the target array with the operation arguments.
+ * Else, handle it with objectPath.
+ * @param replicant - The Replicant to perform the operation on.
+ * @param operation - The operation to perform.
+ */
+export function applyOperation<T>(replicant: Replicant<T>, operation: Operation<T>): boolean {
+	replicant._ignoreProxy = true;
+
+	let result;
+	const path = pathStrToPathArr(operation.path);
+	if (ARRAY_MUTATOR_METHODS.includes(operation.method)) {
+		const arr = objectPath.get(replicant.value, path);
+		result = arr[operation.method].apply(arr, operation.args);
+
+		// Recursively check for any objects that may have been added by the above method
+		// and that need to be Proxied.
+		proxyRecursive(replicant, arr, operation.path);
+	} else {
+		switch (operation.method) {
+			case 'overwrite': {
+				const { newValue } = operation.args;
+				replicant.value = proxyRecursive(replicant, newValue, operation.path);
+				result = true;
+				break;
+			}
+
+			case 'add':
+			case 'update': {
+				path.push(operation.args.prop);
+
+				let { newValue } = operation.args;
+				if (typeof newValue === 'object') {
+					newValue = proxyRecursive(replicant, newValue, pathArrToPathStr(path));
+				}
+
+				result = objectPath.set(replicant.value, path, newValue);
+				break;
+			}
+
+			case 'delete':
+				// Workaround for https://github.com/mariocasciaro/object-path/issues/69
+				if (path.length === 0 || objectPath.has(replicant.value, path)) {
+					const target = objectPath.get(replicant.value, path);
+					result = delete target[operation.args.prop];
+				}
+
+				break;
+			/* istanbul ignore next */
+			default:
+				/* istanbul ignore next */
+				throw new Error(`Unexpected operation method "${operation.method}"`);
+		}
+	}
+
+	replicant._ignoreProxy = false;
+	return result;
+}
+
+/**
+ * Generates a JSON Schema validator function from the `schema` property of the provided replicant.
+ * @param replicant {object} - The Replicant to perform the operation on.
+ * @returns {function} - The generated validator function.
+ */
+export function generateValidator(replicant: Replicant): Validator {
+	const validate = validator(replicant.schema, {
+		greedy: true,
+		verbose: true,
+	});
 
 	/**
-	 * If the operation is an array mutator method, call it on the target array with the operation arguments.
-	 * Else, handle it with objectPath.
-	 * @param replicant {object} - The Replicant to perform the operation on.
-	 * @param operation {object} - The operation to perform.
+	 * Validates a value against the current Replicant's schema.
+	 * Throws when the value fails validation.
+	 * @param [value=replicant.value] {*} - The value to validate. Defaults to the replicant's current value.
+	 * @param [opts] {Object}
+	 * @param [opts.throwOnInvalid = true] {Boolean} - Whether or not to immediately throw when the provided value fails validation against the schema.
 	 */
-	applyOperation(replicant, operation) {
-		replicant._ignoreProxy = true;
+	return function(this: Replicant, value = replicant.value, { throwOnInvalid = true } = {}) {
+		const result = validate(value);
+		if (!result) {
+			this.validationErrors = validate.errors;
 
-		let result;
-		const path = pathStrToPathArr(operation.path);
-		if (ARRAY_MUTATOR_METHODS.indexOf(operation.method) >= 0) {
-			const arr = objectPath.get(replicant.value, path);
-			result = arr[operation.method].apply(arr, operation.args);
-
-			// Recursively check for any objects that may have been added by the above method
-			// and that need to be Proxied.
-			proxyRecursive(replicant, arr, operation.path);
-		} else {
-			switch (operation.method) {
-				case 'overwrite': {
-					const { newValue } = operation.args;
-					replicant.value = proxyRecursive(replicant, newValue, operation.path);
-					result = true;
-					break;
-				}
-
-				case 'add':
-				case 'update': {
-					path.push(operation.args.prop);
-
-					let { newValue } = operation.args;
-					if (typeof newValue === 'object') {
-						newValue = proxyRecursive(replicant, newValue, pathArrToPathStr(path));
+			if (throwOnInvalid) {
+				let errorMessage = `Invalid value rejected for replicant "${replicant.name}" in namespace "${replicant.namespace}":\n`;
+				validate.errors.forEach(error => {
+					const field = error.field.replace(/^data\./, '');
+					if (error.message === 'is the wrong type') {
+						errorMessage += `\tField "${field}" ${error.message}. Value "${String(
+							error.value,
+						)}" (type: ${typeof error.value}) was provided, expected type "${error.type}"\n `;
+					} else if (error.message === 'has additional properties') {
+						errorMessage += `\tField "${field}" ${error.message}: "${String(error.value)}"\n`;
+					} else {
+						errorMessage += `\tField "${field}" ${error.message}\n`;
 					}
-
-					result = objectPath.set(replicant.value, path, newValue);
-					break;
-				}
-
-				case 'delete':
-					// Workaround for https://github.com/mariocasciaro/object-path/issues/69
-					if (path.length === 0 || objectPath.has(replicant.value, path)) {
-						const target = objectPath.get(replicant.value, path);
-						result = delete target[operation.args.prop];
-					}
-
-					break;
-				/* istanbul ignore next */
-				default:
-					/* istanbul ignore next */
-					throw new Error(`Unexpected operation method "${operation.method}"`);
+				});
+				throw new Error(errorMessage);
 			}
 		}
 
-		replicant._ignoreProxy = false;
 		return result;
-	},
-
-	/**
-	 * Generates a JSON Schema validator function from the `schema` property of the provided replicant.
-	 * @param replicant {object} - The Replicant to perform the operation on.
-	 * @returns {function} - The generated validator function.
-	 */
-	generateValidator(replicant) {
-		const validate = validator(replicant.schema, {
-			greedy: true,
-			verbose: true,
-		});
-
-		/**
-		 * Validates a value against the current Replicant's schema.
-		 * Throws when the value fails validation.
-		 * @param [value=replicant.value] {*} - The value to validate. Defaults to the replicant's current value.
-		 * @param [opts] {Object}
-		 * @param [opts.throwOnInvalid = true] {Boolean} - Whether or not to immediately throw when the provided value fails validation against the schema.
-		 */
-		return function(value = replicant.value, { throwOnInvalid = true } = {}) {
-			const result = validate(value);
-			if (!result) {
-				this.validationErrors = validate.errors;
-
-				if (throwOnInvalid) {
-					let errorMessage = `Invalid value rejected for replicant "${replicant.name}" in namespace "${replicant.namespace}":\n`;
-					validate.errors.forEach(error => {
-						const field = error.field.replace(/^data\./, '');
-						if (error.message === 'is the wrong type') {
-							errorMessage += `\tField "${field}" ${error.message}. Value "${
-								error.value
-							}" (type: ${typeof error.value}) was provided, expected type "${error.type}"\n `;
-						} else if (error.message === 'has additional properties') {
-							errorMessage += `\tField "${field}" ${error.message}: "${error.value}"\n`;
-						} else {
-							errorMessage += `\tField "${field}" ${error.message}\n`;
-						}
-					});
-					throw new Error(errorMessage);
-				}
-			}
-
-			return result;
-		};
-	},
-};
+	};
+}
 
 /**
  * Recursively Proxies an Array or Object. Does nothing to primitive values.
@@ -306,7 +346,7 @@ module.exports = {
  * @returns {*} - The recursively Proxied value (or just `value` unchanged, if `value` is a primitive)
  * @private
  */
-function proxyRecursive(replicant, value, path) {
+export function proxyRecursive<T>(replicant, value: T, path): T {
 	if (typeof value === 'object' && value !== null) {
 		let p;
 

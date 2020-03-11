@@ -1,31 +1,61 @@
-'use strict';
-
 // Native
-const EventEmitter = require('events');
-const fs = require('fs');
-const throttle = require('lodash.throttle');
-const path = require('path');
+import { EventEmitter } from 'events';
+import * as fs from 'fs';
+import * as path from 'path';
 
 // Packages
-const $RefParser = require('json-schema-lib');
-const clone = require('clone');
-const { LocalStorage } = require('node-localstorage');
-const schemaDefaults = require('json-schema-defaults');
-const sha1 = require('sha1');
+import throttle from 'lodash.throttle';
+import $RefParser from 'json-schema-lib';
+import clone from 'clone';
+import { LocalStorage } from 'node-localstorage';
+import schemaDefaults from 'json-schema-defaults';
+import sha1 from 'sha1';
 
 // Ours
-const replicator = require('../replicator');
-const shared = require('./shared');
-const replaceRefs = require('./schema-hacks');
+import replicator from '../replicator';
+import {
+	Operation,
+	proxyRecursive,
+	Options,
+	generateValidator,
+	DEFAULT_PERSISTENCE_INTERVAL,
+	Validator,
+} from './shared';
+import replaceRefs from './schema-hacks';
+import { LoggerInterface } from '../logger';
 
 const REPLICANTS_ROOT = path.join(process.env.NODECG_ROOT, 'db/replicants');
 
-class Replicant extends EventEmitter {
-	get value() {
+class Replicant<T> extends EventEmitter {
+	name: string;
+
+	namespace: string;
+
+	opts: Options<T>;
+
+	revision: number;
+
+	log: LoggerInterface;
+
+	schema?: { [k: string]: any };
+
+	schemaSum?: string;
+
+	private __value: T | undefined;
+
+	private _oldValue: T | undefined;
+
+	private _ignoreProxy: boolean;
+
+	private _operationQueue: Array<Operation<T>>;
+
+	private _pendingOperationFlush: boolean;
+
+	get value(): T | undefined {
 		return this.__value;
 	}
 
-	set value(newValue) {
+	set value(newValue: T | undefined) {
 		if (newValue === this.__value) {
 			this.log.replicants('value unchanged, no action will be taken');
 			return;
@@ -35,15 +65,21 @@ class Replicant extends EventEmitter {
 		this.log.replicants('running setter with', newValue);
 		const clonedNewVal = clone(newValue);
 		this._ignoreProxy = true;
-		this.__value = shared._proxyRecursive(this, newValue, '/');
+		this.__value = proxyRecursive(this, newValue, '/');
 		this._ignoreProxy = false;
-		this._addOperation('/', 'overwrite', {
-			newValue: clonedNewVal,
+		this._addOperation({
+			path: '/',
+			method: 'overwrite',
+			args: {
+				newValue: clonedNewVal,
+			},
 		});
-		return true;
 	}
 
-	constructor(name, namespace, opts = {}) {
+	// eslint-disable-next-line complexity
+	constructor(name: string, namespace: string, opts: Options<T> = {}) {
+		super();
+
 		if (!name || typeof name !== 'string') {
 			throw new Error('Must supply a name when instantiating a Replicant');
 		}
@@ -63,8 +99,6 @@ class Replicant extends EventEmitter {
 			replicator.declaredReplicants[namespace] = {};
 		}
 
-		super();
-
 		// Load logger
 		this.log = require('../logger')(`Replicant/${namespace}.${name}`);
 
@@ -73,7 +107,7 @@ class Replicant extends EventEmitter {
 		}
 
 		if (typeof opts.persistenceInterval === 'undefined') {
-			opts.persistenceInterval = shared.DEFAULT_PERSISTENCE_INTERVAL;
+			opts.persistenceInterval = DEFAULT_PERSISTENCE_INTERVAL;
 		}
 
 		this.name = name;
@@ -85,11 +119,6 @@ class Replicant extends EventEmitter {
 
 		this._operationQueue = [];
 
-		// Assign a stub so that `validate` can still be freely called even if there's no schema. Less checking to do.
-		this.validate = function() {
-			return true;
-		};
-
 		// If present, parse the schema and generate the validator function.
 		if (opts.schemaPath) {
 			const absoluteSchemaPath = path.isAbsolute(opts.schemaPath)
@@ -100,7 +129,7 @@ class Replicant extends EventEmitter {
 					const schema = $RefParser.readSync(absoluteSchemaPath);
 					this.schema = replaceRefs(schema.root, schema.rootFile, schema.files);
 					this.schemaSum = sha1(this.schema);
-					this.validate = shared.generateValidator(this);
+					this.validate = generateValidator(this);
 				} catch (e) {
 					/* istanbul ignore next */
 					if (!process.env.NODECG_TEST) {
@@ -182,19 +211,23 @@ class Replicant extends EventEmitter {
 	}
 
 	/**
+	 * Used to validate the new value of a replicant.
+	 *
+	 * This is a stub that will be replaced if a Schema is available.
+	 */
+	validate: Validator = (_: any, __: any): boolean => {
+		return true;
+	};
+
+	/**
 	 * Adds an operation to the operation queue, to be flushed at the end of the current tick.
 	 * @param path {string} - The object path to where this operation took place.
 	 * @param method {string} - The name of the operation.
 	 * @param args {array} - The arguments provided to this operation
 	 * @private
 	 */
-	_addOperation(path, method, args) {
-		this._operationQueue.push({
-			path,
-			method,
-			args,
-		});
-
+	private _addOperation(operation: Operation<T>): void {
+		this._operationQueue.push(operation);
 		if (!this._pendingOperationFlush) {
 			this._oldValue = clone(this.value);
 			this._pendingOperationFlush = true;
@@ -206,7 +239,7 @@ class Replicant extends EventEmitter {
 	 * Emits all queued operations via Socket.IO & empties this._operationQueue.
 	 * @private
 	 */
-	_flushOperations() {
+	private _flushOperations(): void {
 		this._pendingOperationFlush = false;
 		this.revision++;
 		replicator.emitToClients(this.namespace, 'replicant:operations', {

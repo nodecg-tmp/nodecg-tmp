@@ -1,10 +1,24 @@
-'use strict';
+// Native
+import * as path from 'path';
 
-const path = require('path');
 const ASSETS_ROOT = path.join(process.env.NODECG_ROOT, 'assets');
 
-class AssetFile {
-	constructor(filepath, sum) {
+export default class AssetFile {
+	sum: string;
+
+	base: string;
+
+	ext: string;
+
+	name: string;
+
+	namespace: string;
+
+	category: string;
+
+	url: string;
+
+	constructor(filepath: string, sum: string) {
 		const parsedPath = path.parse(filepath);
 		const parts = parsedPath.dir.replace(ASSETS_ROOT + path.sep, '').split(path.sep);
 
