@@ -1,9 +1,10 @@
-'use strict';
+// Native
+import * as path from 'path';
 
-const path = require('path');
-const semver = require('semver');
+// Packages
+import * as semver from 'semver';
 
-module.exports = function(pkg, bundlePath) {
+export default function(pkg: NodeCG.PackageJSON, bundlePath: string): NodeCG.Manifest {
 	if (!semver.valid(pkg.version)) {
 		throw new Error(`${pkg.name}'s package.json must specify a valid version.`);
 	}
@@ -22,19 +23,18 @@ module.exports = function(pkg, bundlePath) {
 		throw new Error(`${pkg.name}'s folder is named "${bundleFolderName}". Please rename it to "${pkg.name}".`);
 	}
 
-	const bundle = pkg.nodecg;
-
 	// Grab the standard properties from the package.json that we care about.
-	bundle.name = pkg.name;
-	bundle.version = pkg.version;
-	bundle.license = pkg.license;
-	bundle.description = pkg.description;
-	bundle.homepage = pkg.homepage;
-	bundle.author = pkg.author;
-	bundle.contributors = pkg.contributors;
-	bundle.dependencies = pkg.dependencies;
-	bundle.enableCustomCues = typeof pkg.nodecg.enableCustomCues === 'undefined' ? false : pkg.nodecg.enableCustomCues;
-	bundle.transformBareModuleSpecifiers = Boolean(pkg.nodecg.transformBareModuleSpecifiers);
+	const manifest: NodeCG.Manifest = {
+		...pkg.nodecg,
+		name: pkg.name,
+		version: pkg.version,
+		license: pkg.license,
+		description: pkg.description,
+		homepage: pkg.homepage,
+		author: pkg.author,
+		contributors: pkg.contributors,
+		transformBareModuleSpecifiers: Boolean(pkg.nodecg.transformBareModuleSpecifiers),
+	};
 
-	return bundle;
-};
+	return manifest;
+}

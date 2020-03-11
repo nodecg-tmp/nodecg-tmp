@@ -1,18 +1,17 @@
-'use strict';
-
 // Native
-const { EventEmitter } = require('events');
-const fs = require('fs.extra');
-const path = require('path');
+import { EventEmitter } from 'events';
+import path from 'path';
 
 // Packages
-const chokidar = require('chokidar');
-const debounce = require('lodash.debounce');
-const semver = require('semver');
+import fs from 'fs-extra';
+import chokidar from 'chokidar';
+import debounce from 'lodash.debounce';
+import semver from 'semver';
 
 // Ours
-const parseBundle = require('./bundle-parser');
-const parseBundleGit = require('./bundle-parser/git');
+import parseBundle from './bundle-parser';
+import parseBundleGit from './bundle-parser/git';
+import createLogger from './logger';
 
 // Start up the watcher, but don't watch any files yet.
 // We'll add the files we want to watch later, in the init() method.
@@ -33,11 +32,11 @@ const watcher = chokidar.watch(
 const blacklistedBundleDirectories = ['node_modules', 'bower_components'];
 
 const emitter = new EventEmitter();
-const bundles = [];
-let log;
-let _cfgPath;
-let backoffTimer = null;
-let hasChanged = {};
+const bundles: NodeCG.Bundle[] = [];
+const log = createLogger('nodecg/lib/bundles');
+const hasChanged = new Set<string>();
+let _cfgPath: string;
+let backoffTimer: NodeJS.Timeout | undefined;
 let initialized = false;
 
 // This is on a debouncer to avoid false-positives that can happen when editing a manifest.
@@ -65,26 +64,28 @@ const debouncedGitChangeHandler = debounce(bundleName => {
 	emitter.emit('gitChanged', bundle);
 }, 250);
 
-module.exports = emitter;
+export default emitter;
 
 /**
  * Constructs a bundle-manager.
- * @param bundlesPath {String} - The path to NodeCG's "bundles" folder
- * @param cfgPath {String} - The path to NodeCG's "cfg" folder.
- * @param nodecgVersion {String} - The value of "version" in NodeCG's package.json.
- * @param nodecgConfig {Object} - The global NodeCG config.
- * @param Logger {Function} - A preconfigured @nodecg/logger constructor.
+ * @param bundlesPaths - An array of paths from which to load bundles.
+ * @param cfgPath - The path to NodeCG's "cfg" folder.
+ * @param nodecgVersion - The value of "version" in NodeCG's package.json.
+ * @param nodecgConfig - The global NodeCG config.
  * @return {Object} - A bundle-manager instance.
  */
-// eslint-disable-next-line max-params
-module.exports.init = function(bundlesPaths, cfgPath, nodecgVersion, nodecgConfig, Logger) {
+export function init(
+	bundlesPaths: string[],
+	cfgPath: string,
+	nodecgVersion: string,
+	nodecgConfig: { [k: string]: any },
+): void {
 	if (initialized) {
 		throw new Error('Cannot initialize when already initialized');
 	}
 
 	initialized = true;
 	_cfgPath = cfgPath;
-	log = new Logger('nodecg/lib/bundles');
 	log.trace('Loading bundles');
 
 	bundlesPaths.forEach(bundlesPath => {
@@ -152,35 +153,21 @@ module.exports.init = function(bundlesPaths, cfgPath, nodecgVersion, nodecgConfi
 				return;
 			}
 
-			if (
-				nodecgConfig &&
-				nodecgConfig.bundles &&
-				nodecgConfig.bundles.disabled &&
-				nodecgConfig.bundles.disabled.includes(bundleFolderName)
-			) {
-				log.debug('Not loading bundle ' + bundleFolderName + ' as it is disabled in config');
+			if (nodecgConfig?.bundles?.disabled?.includes(bundleFolderName)) {
+				log.debug(`Not loading bundle ${bundleFolderName} as it is disabled in config`);
 				return;
 			}
 
-			if (
-				nodecgConfig &&
-				nodecgConfig.bundles &&
-				nodecgConfig.bundles.enabled &&
-				!nodecgConfig.bundles.enabled.includes(bundleFolderName)
-			) {
-				log.debug('Not loading bundle ' + bundleFolderName + ' as it is not enabled in config');
+			if (!nodecgConfig?.bundles?.enabled?.includes(bundleFolderName)) {
+				log.debug(`Not loading bundle ${bundleFolderName} as it is not enabled in config`);
 				return;
 			}
 
 			// Parse each bundle and push the result onto the bundles array
-			let bundle;
 			const bundleCfgPath = path.join(cfgPath, `${bundleFolderName}.json`);
-
-			if (fs.existsSync(bundleCfgPath)) {
-				bundle = parseBundle(bundlePath, bundleCfgPath);
-			} else {
-				bundle = parseBundle(bundlePath);
-			}
+			const bundle = fs.existsSync(bundleCfgPath)
+				? parseBundle(bundlePath, bundleCfgPath)
+				: parseBundle(bundlePath);
 
 			// Check if the bundle is compatible with this version of NodeCG
 			if (!semver.satisfies(nodecgVersion, bundle.compatibleRange)) {
@@ -209,53 +196,48 @@ module.exports.init = function(bundlesPaths, cfgPath, nodecgVersion, nodecgConfi
 	});
 
 	emitter.emit('init', bundles);
-};
+}
 
 /**
  * Returns a shallow-cloned array of all currently active bundles.
  * @returns {Array.<Object>}
  */
-module.exports.all = function() {
+export function all(): NodeCG.Bundle[] {
 	return bundles.slice(0);
-};
+}
 
 /**
  * Returns the bundle with the given name. undefined if not found.
  * @param name {String} - The name of the bundle to find.
  * @returns {Object|undefined}
  */
-module.exports.find = function(name) {
-	const len = bundles.length;
-	for (let i = 0; i < len; i++) {
-		if (bundles[i].name === name) {
-			return bundles[i];
-		}
-	}
-};
+export function find(name: string): NodeCG.Bundle | undefined {
+	return bundles.find(b => b.name === name);
+}
 
 /**
  * Adds a bundle to the internal list, replacing any existing bundle with the same name.
  * @param bundle {Object}
  */
-module.exports.add = function(bundle) {
+export function add(bundle: NodeCG.Bundle): void {
 	/* istanbul ignore if: Again, it shouldn't be possible for "bundle" to be undefined, but just in case... */
 	if (!bundle) {
 		return;
 	}
 
 	// Remove any existing bundles with this name
-	if (module.exports.find(bundle.name)) {
-		module.exports.remove(bundle.name);
+	if (find(bundle.name)) {
+		remove(bundle.name);
 	}
 
 	bundles.push(bundle);
-};
+}
 
 /**
  * Removes a bundle with the given name from the internal list. Does nothing if no match found.
  * @param bundleName {String}
  */
-module.exports.remove = function(bundleName) {
+export function remove(bundleName: string): void {
 	const len = bundles.length;
 	for (let i = 0; i < len; i++) {
 		// TODO: this check shouldn't have to happen, idk why things in this array can sometimes be undefined
@@ -267,22 +249,22 @@ module.exports.remove = function(bundleName) {
 			bundles.splice(i, 1);
 		}
 	}
-};
+}
 
 /**
  * Only used by tests.
  */
-module.exports._stopWatching = function() {
+export function _stopWatching(): void {
 	watcher.close();
-};
+}
 
-function handleChange(bundleName) {
+function handleChange(bundleName: string): void {
 	setTimeout(() => {
 		_handleChange(bundleName);
 	}, 100);
 }
 
-function _handleChange(bundleName) {
+function _handleChange(bundleName: string): void {
 	const bundle = module.exports.find(bundleName);
 
 	/* istanbul ignore if: It's rare for `bundle` to be undefined here, but it can happen when using black/whitelisting. */
@@ -292,7 +274,7 @@ function _handleChange(bundleName) {
 
 	if (backoffTimer) {
 		log.debug('Backoff active, delaying processing of change detected in', bundleName);
-		hasChanged[bundleName] = true;
+		hasChanged.add(bundleName);
 		resetBackoffTimer();
 	} else {
 		log.debug('Processing change event for', bundleName);
@@ -320,21 +302,16 @@ function _handleChange(bundleName) {
 /**
  * Resets the backoff timer used to avoid event thrashing when many files change rapidly.
  */
-function resetBackoffTimer() {
-	clearTimeout(backoffTimer);
+function resetBackoffTimer(): void {
+	clearTimeout(backoffTimer as any); // Typedefs for clearTimeout are always wonky
 	backoffTimer = setTimeout(() => {
-		backoffTimer = null;
-		for (const bundleName in hasChanged) {
-			/* istanbul ignore if: Standard hasOwnProperty check, doesn't need to be tested */
-			if (!{}.hasOwnProperty.call(hasChanged, bundleName)) {
-				continue;
-			}
-
+		backoffTimer = undefined;
+		for (const bundleName of hasChanged) {
 			log.debug('Backoff finished, emitting change event for', bundleName);
 			handleChange(bundleName);
 		}
 
-		hasChanged = {};
+		hasChanged.clear();
 	}, 500);
 }
 
@@ -344,7 +321,7 @@ function resetBackoffTimer() {
  * @returns {String} - The name of the bundle that owns this path.
  * @private
  */
-function extractBundleName(bundlesPath, filePath) {
+function extractBundleName(bundlesPath: string, filePath: string): string {
 	return filePath.replace(bundlesPath, '').split(path.sep)[1];
 }
 
@@ -355,8 +332,8 @@ function extractBundleName(bundlesPath, filePath) {
  * @returns {Boolean}
  * @private
  */
-function isPanelHTMLFile(bundleName, filePath) {
-	const bundle = module.exports.find(bundleName);
+function isPanelHTMLFile(bundleName: string, filePath: string): boolean {
+	const bundle = find(bundleName);
 	if (bundle) {
 		return bundle.dashboard.panels.some(panel => {
 			return panel.path.endsWith(filePath);
@@ -373,7 +350,7 @@ function isPanelHTMLFile(bundleName, filePath) {
  * @returns {Boolean}
  * @private
  */
-function isManifest(bundleName, filePath) {
+function isManifest(bundleName: string, filePath: string): boolean {
 	return path.dirname(filePath).endsWith(bundleName) && path.basename(filePath) === 'package.json';
 }
 
@@ -384,7 +361,7 @@ function isManifest(bundleName, filePath) {
  * @returns {Boolean}
  * @private
  */
-function isGitData(bundleName, filePath) {
+function isGitData(bundleName: string, filePath: string): boolean {
 	const regex = new RegExp(`${bundleName}${'\\'}${path.sep}${'\\'}.git`);
 	return regex.test(filePath);
 }

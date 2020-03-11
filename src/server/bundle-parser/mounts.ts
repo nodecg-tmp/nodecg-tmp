@@ -1,20 +1,18 @@
-'use strict';
-
-module.exports = function(bundle) {
-	const mounts = [];
+export default function(manifest: NodeCG.Manifest): NodeCG.Bundle.Mount[] {
+	const mounts: NodeCG.Bundle.Mount[] = [];
 
 	// Return early if no mounts
-	if (typeof bundle.mount === 'undefined' || bundle.mount.length <= 0) {
+	if (typeof manifest.mount === 'undefined' || manifest.mount.length <= 0) {
 		return mounts;
 	}
 
-	if (!Array.isArray(bundle.mount)) {
+	if (!Array.isArray(manifest.mount)) {
 		throw new Error(
-			`${bundle.name} has an invalid "nodecg.mount" property in its package.json, it must be an array`,
+			`${manifest.name} has an invalid "nodecg.mount" property in its package.json, it must be an array`,
 		);
 	}
 
-	bundle.mount.forEach((mount, index) => {
+	manifest.mount.forEach((mount, index) => {
 		const missingProps = [];
 		// Check for missing properties
 		if (typeof mount.directory === 'undefined') {
@@ -41,4 +39,4 @@ module.exports = function(bundle) {
 	});
 
 	return mounts;
-};
+}

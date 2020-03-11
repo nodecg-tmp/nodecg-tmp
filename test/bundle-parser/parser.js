@@ -36,7 +36,6 @@ test('should return the expected data when "nodecg" property does exist', t => {
 	t.is(parsedBundle.license, 'MIT');
 	t.is(parsedBundle.compatibleRange, '~0.7.0');
 	t.is(parsedBundle.bundleDependencies, undefined);
-	t.is(typeof parsedBundle.rawManifest, 'string');
 	t.is(typeof parsedBundle.dir, 'string');
 	t.deepEqual(parsedBundle.dependencies, { commander: '^2.6.0' });
 	t.is(typeof parsedBundle.dashboard.dir, 'string');

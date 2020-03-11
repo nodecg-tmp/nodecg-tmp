@@ -1,16 +1,14 @@
-'use strict';
-
 // Native
-const path = require('path');
-const fs = require('fs');
+import * as path from 'path';
+import * as fs from 'fs';
 
 // Packages
-const clone = require('clone');
-const defaults = require('json-schema-defaults');
-const extend = require('extend');
-const tv4 = require('tv4');
+import clone from 'clone';
+import defaults from 'json-schema-defaults';
+import extend from 'extend';
+import tv4 from 'tv4';
 
-module.exports.parse = function(bundle, cfgPath) {
+export function parse(bundleName: string, bundleDir: string, cfgPath: string): { [k: string]: any } {
 	if (!fs.existsSync(cfgPath)) {
 		throw new Error(`bundleCfgPath "${cfgPath}" does not exist`);
 	}
@@ -22,12 +20,12 @@ module.exports.parse = function(bundle, cfgPath) {
 		throw new Error(`bundleCfgPath "${cfgPath}" could not be read. Ensure that it is valid JSON.`);
 	}
 
-	const cfgSchemaPath = path.resolve(bundle.dir, 'configschema.json');
+	const cfgSchemaPath = path.resolve(bundleDir, 'configschema.json');
 	if (!fs.existsSync(cfgSchemaPath)) {
 		return userConfig;
 	}
 
-	const schema = _parseSchema(bundle.name, cfgSchemaPath);
+	const schema = _parseSchema(bundleName, cfgSchemaPath);
 	const defaultConfig = defaults(schema);
 	const userConfigValid = tv4.validateResult(userConfig, schema).valid;
 	let finalConfig;
@@ -43,10 +41,10 @@ module.exports.parse = function(bundle, cfgPath) {
 				continue;
 			}
 
-			const _foo = {};
+			const _foo: { [k: string]: any } = {};
 			_foo[key] = defaultConfig[key];
 
-			const _tempMerged = extend(true, _foo, clone(finalConfig));
+			const _tempMerged: { [k: string]: any } = extend(true, _foo, clone(finalConfig));
 			const result = tv4.validateResult(_tempMerged, schema);
 			if (result.valid) {
 				finalConfig = _tempMerged;
@@ -62,23 +60,24 @@ module.exports.parse = function(bundle, cfgPath) {
 	}
 
 	throw new Error(
-		`Config for bundle "${bundle.name}" is invalid:\n${result.error.message} at ${result.error.dataPath}`,
+		`Config for bundle "${bundleName}" is invalid:\n${result.error.message as string} at ${result.error
+			.dataPath as string}`,
 	);
-};
+}
 
-module.exports.parseDefaults = function(bundle) {
-	const cfgSchemaPath = path.resolve(bundle.dir, 'configschema.json');
+export function parseDefaults(bundleName: string, bundleDir: string): { [k: string]: any } {
+	const cfgSchemaPath = path.resolve(bundleDir, 'configschema.json');
 	if (fs.existsSync(cfgSchemaPath)) {
-		const schema = _parseSchema(bundle.name, cfgSchemaPath);
+		const schema = _parseSchema(bundleName, cfgSchemaPath);
 		return defaults(schema);
 	}
 
 	return {};
-};
+}
 
-function _parseSchema(bundleName, schemaPath) {
+function _parseSchema(bundleName: string, schemaPath: string): { [k: string]: any } {
 	try {
-		return JSON.parse(fs.readFileSync(schemaPath));
+		return JSON.parse(fs.readFileSync(schemaPath, { encoding: 'utf8' }));
 	} catch (_) {
 		throw new Error(
 			`configschema.json for bundle "${bundleName}" could not be read. Ensure that it is valid JSON.`,

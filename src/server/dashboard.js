@@ -139,7 +139,6 @@ function getDashboardContext() {
 				});
 			}
 
-			delete cleanedBundle.rawManifest;
 			return cleanedBundle;
 		}),
 		publicConfig: configHelper.filteredConfig,

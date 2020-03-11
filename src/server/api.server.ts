@@ -12,7 +12,7 @@ const { filteredConfig } = require('./config');
 
 let io: SocketIO.Server;
 
-export class NodeCGAPIServer extends NodeCGAPIBase {
+export default class NodeCGAPIServer extends NodeCGAPIBase {
 	get Logger() {
 		return Logger;
 	}

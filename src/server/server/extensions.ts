@@ -1,17 +1,23 @@
-'use strict';
+// Native
+import { EventEmitter } from 'events';
+import path from 'path';
 
-const { EventEmitter } = require('events');
-const path = require('path');
-const semver = require('semver');
-const Raven = require('raven');
-const bundles = require('../bundle-manager');
-const ExtensionApi = require('../api');
-const log = require('../logger')('nodecg/lib/server/extensions');
-const extensions = {};
+// Packages
+import semver from 'semver';
+import * as Sentry from '@sentry/node';
 
-module.exports = new EventEmitter();
+// Ours
+import * as bundles from '../bundle-manager';
+import ExtensionApi from '../api.server';
+import createLogger from '../logger';
 
-module.exports.init = function() {
+const log = createLogger('nodecg/lib/server/extensions');
+const extensions: { [k: string]: unknown } = {};
+const satisfiedDepNames = new WeakMap<NodeCG.Bundle, string[]>();
+const emitter = new EventEmitter();
+export default emitter;
+
+export function init(): void {
 	// TODO: Some of what's happening in here has nothing to do with extensions
 	log.trace('Starting extension mounting');
 
@@ -66,7 +72,8 @@ module.exports.init = function() {
 					}
 
 					/* istanbul ignore if */
-					if (bundle._satisfiedDepNames.indexOf(dep) > -1) {
+					const satisfied = satisfiedDepNames.get(bundle);
+					if (satisfied?.includes(dep)) {
 						continue;
 					}
 
@@ -87,32 +94,38 @@ module.exports.init = function() {
 	}
 
 	log.trace('Completed extension mounting');
-};
+}
 
-module.exports.getExtensions = function() {
+export function getExtensions(): { [k: string]: unknown } {
 	return extensions;
-};
+}
 
-function _loadExtension(bundle) {
+function _loadExtension(bundle: NodeCG.Bundle): void {
 	const extPath = path.join(bundle.dir, 'extension');
 	try {
+		/* eslint-disable @typescript-eslint/no-var-requires */
 		const extension = require(extPath)(new ExtensionApi(bundle));
+		/* eslint-enable @typescript-eslint/no-var-requires */
 		log.info('Mounted %s extension', bundle.name);
 		extensions[bundle.name] = extension;
 	} catch (err) {
 		bundles.remove(bundle.name);
-		log.warn('Failed to mount %s extension:\n', bundle.name, err && err.stack ? err.stack : err);
+		log.warn('Failed to mount %s extension:\n', err?.stack ?? err);
 		if (global.sentryEnabled) {
-			err.message = `Failed to mount ${bundle.name} extension: ${err.message}`;
-			Raven.captureException(err);
+			err.message = `Failed to mount ${bundle.name} extension: ${(err?.message ?? err) as string}`;
+			Sentry.captureException(err);
 		}
 	}
 }
 
-function _bundleDepsSatisfied(bundle, loadedBundles) {
+function _bundleDepsSatisfied(bundle: NodeCG.Bundle, loadedBundles: NodeCG.Bundle[]): boolean {
 	const deps = bundle.bundleDependencies;
+	if (!deps) {
+		return true;
+	}
+
 	const unsatisfiedDepNames = Object.keys(deps);
-	bundle._satisfiedDepNames = bundle._satisfiedDepNames || [];
+	const arr = satisfiedDepNames.get(bundle)?.slice(0) ?? [];
 
 	loadedBundles.forEach(loadedBundle => {
 		// Find out if this loaded bundle is one of the dependencies of the bundle in question.
@@ -120,11 +133,12 @@ function _bundleDepsSatisfied(bundle, loadedBundles) {
 		const index = unsatisfiedDepNames.indexOf(loadedBundle.name);
 		if (index > -1) {
 			if (semver.satisfies(loadedBundle.version, deps[loadedBundle.name])) {
-				bundle._satisfiedDepNames.push(loadedBundle.name);
+				arr.push(loadedBundle.name);
 				unsatisfiedDepNames.splice(index, 1);
 			}
 		}
 	});
 
+	satisfiedDepNames.set(bundle, arr);
 	return unsatisfiedDepNames.length === 0;
 }
