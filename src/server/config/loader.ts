@@ -1,26 +1,26 @@
-'use strict';
-
 // Native
-const fs = require('fs');
+import fs from 'fs';
 
 // Packages
-const clone = require('clone');
-const convict = require('convict');
+import clone from 'clone';
+import { cosmiconfigSync as cosmiconfig } from 'cosmiconfig';
 
 const CONVICT_LOG_LEVEL = {
 	doc: 'The lowest level of output to log. "trace" is the most, "error" is the least.',
-	format(val) {
-		return ['trace', 'debug', 'info', 'warn', 'error'].includes(val);
+	format(val: unknown) {
+		return ['trace', 'debug', 'info', 'warn', 'error'].includes(val as string);
 	},
 	default: 'info',
 };
 
-const VALIDATE_STRING_ARRAY = function(val) {
+const VALIDATE_STRING_ARRAY = function(val: unknown): boolean {
 	return Array.isArray(val) && val.every(item => typeof item === 'string');
 };
 
-module.exports = function(userCfgPath) {
-	const convictSchema = {
+// eslint-disable-next-line @typescript-eslint/explicit-function-return-type
+function generateConfigSchema(userCfgPath: string) {
+	const userCfgExists = fs.existsSync(userCfgPath);
+	const baseSchema = {
 		host: {
 			doc: 'The IP address or hostname that NodeCG should bind to.',
 			format: String,
@@ -79,7 +79,7 @@ module.exports = function(userCfgPath) {
 		bundles: {
 			enabled: {
 				doc: 'A whitelist array of bundle names that will be the only ones loaded at startup.',
-				format(val) {
+				format(val: unknown) {
 					return VALIDATE_STRING_ARRAY(val) || val === null; // eslint-disable-line new-cap
 				},
 				default: null,
@@ -87,7 +87,7 @@ module.exports = function(userCfgPath) {
 			},
 			disabled: {
 				doc: 'A blacklist array of bundle names that will be excluded from loading at startup.',
-				format(val) {
+				format(val: unknown) {
 					return VALIDATE_STRING_ARRAY(val) || val === null; // eslint-disable-line new-cap
 				},
 				default: null,
@@ -95,7 +95,7 @@ module.exports = function(userCfgPath) {
 			},
 			paths: {
 				doc: 'An array of additional paths where bundles are located',
-				format(val) {
+				format(val: unknown) {
 					return VALIDATE_STRING_ARRAY(val); // eslint-disable-line new-cap
 				},
 				default: [],
@@ -104,25 +104,26 @@ module.exports = function(userCfgPath) {
 		},
 	};
 
-	// Load user config if it exists, and merge it
-	const userCfgExists = fs.existsSync(userCfgPath);
-	if (userCfgExists) {
-		const rawUserConfigFile = fs.readFileSync(userCfgPath, 'utf8');
+	if (!userCfgExists) {
+		return {
+			...baseSchema,
+		};
+	}
 
-		let userConfig;
-		try {
-			userConfig = JSON.parse(rawUserConfigFile);
-		} catch (_) {
-			throw new Error(`Failed to parse ${userCfgPath}. Please ensure that it contains only valid JSON.`);
-		}
+	const rawUserConfigFile = fs.readFileSync(userCfgPath, 'utf8');
+	let userConfig;
+	try {
+		userConfig = JSON.parse(rawUserConfigFile);
+	} catch {
+		throw new Error(`Failed to parse ${userCfgPath}. Please ensure that it contains only valid JSON.`);
+	}
 
-		if (userConfig.bundles) {
-			if (userConfig.bundles.enabled && userConfig.bundles.disabled) {
-				throw new Error('nodecg.json may only contain EITHER bundles.enabled OR bundles.disabled, not both.');
-			}
-		}
+	if (userConfig?.bundles?.enabled && userConfig?.bundles?.disabled) {
+		throw new Error('nodecg.json may only contain EITHER bundles.enabled OR bundles.disabled, not both.');
+	}
 
-		convictSchema.login = {
+	const extendedSchema = {
+		login: {
 			enabled: {
 				doc: 'Whether to enable login security.',
 				format: Boolean,
@@ -133,7 +134,7 @@ module.exports = function(userCfgPath) {
 				format: String,
 
 				// This will throw if the user does not provide a value, but only if login security is enabled.
-				default: userConfig.login && userConfig.login.enabled ? null : '',
+				default: userConfig?.login?.enabled ? null : '',
 			},
 			forceHttpsReturn: {
 				doc:
@@ -152,14 +153,14 @@ module.exports = function(userCfgPath) {
 					format: String,
 
 					// This will throw if the user does not provide a value, but only if Steam auth is enabled.
-					default: userConfig.login && userConfig.login.steam && userConfig.login.steam.enabled ? null : '',
+					default: userConfig?.login?.steam?.enabled ? null : '',
 				},
 				allowedIds: {
 					doc: 'Which 64 bit Steam IDs to allow. Can be obtained from https://steamid.io/',
 					format: VALIDATE_STRING_ARRAY,
 
 					// This will throw if the user does not provide a value, but only if Steam auth is enabled.
-					default: userConfig.login && userConfig.login.steam && userConfig.login.steam.enabled ? null : [],
+					default: userConfig?.login?.steam?.enabled ? null : [],
 				},
 			},
 			twitch: {
@@ -173,14 +174,14 @@ module.exports = function(userCfgPath) {
 					format: String,
 
 					// This will throw if the user does not provide a value, but only if Twitch auth is enabled.
-					default: userConfig.login && userConfig.login.twitch && userConfig.login.twitch.enabled ? null : '',
+					default: userConfig?.login?.twitch?.enabled ? null : '',
 				},
 				clientSecret: {
 					doc: 'A Twitch application ClientSecret http://twitch.tv/kraken/oauth2/clients/new',
 					format: String,
 
 					// This will throw if the user does not provide a value, but only if Twitch auth is enabled.
-					default: userConfig.login && userConfig.login.twitch && userConfig.login.twitch.enabled ? null : '',
+					default: userConfig?.login?.twitch?.enabled ? null : '',
 				},
 				scope: {
 					doc: 'A space-separated string of Twitch application permissions.',
@@ -192,7 +193,7 @@ module.exports = function(userCfgPath) {
 					format: VALIDATE_STRING_ARRAY,
 
 					// This will throw if the user does not provide a value, but only if Twitch auth is enabled.
-					default: userConfig.login && userConfig.login.twitch && userConfig.login.twitch.enabled ? null : [],
+					default: userConfig?.login?.twitch?.enabled ? null : [],
 				},
 			},
 			local: {
@@ -206,12 +207,11 @@ module.exports = function(userCfgPath) {
 					format: VALIDATE_STRING_ARRAY,
 
 					// This will throw if the user does not provide a value, but only if Local auth is enabled.
-					default: userConfig.login && userConfig.login.local && userConfig.login.local.enabled ? null : [],
+					default: userConfig?.login?.local?.enabled ? null : [],
 				},
 			},
-		};
-
-		convictSchema.ssl = {
+		},
+		ssl: {
 			enabled: {
 				doc: 'Whether to enable SSL/HTTPS encryption.',
 				format: Boolean,
@@ -227,23 +227,22 @@ module.exports = function(userCfgPath) {
 				format: String,
 
 				// This will throw if the user does not provide a value, but only if SSL is enabled.
-				default: userConfig.ssl && userConfig.ssl.enabled ? null : '',
+				default: userConfig?.ssl?.enabled ? null : '',
 			},
 			certificatePath: {
 				doc: 'The path to an SSL certificate file.',
 				format: String,
 
 				// This will throw if the user does not provide a value, but only if SSL is enabled.
-				default: userConfig.ssl && userConfig.ssl.enabled ? null : '',
+				default: userConfig?.ssl?.enabled ? null : '',
 			},
 			passphrase: {
 				doc: 'The passphrase for the provided key file.',
 				format: String,
 				default: '',
 			},
-		};
-
-		convictSchema.sentry = {
+		},
+		sentry: {
 			enabled: {
 				doc: 'Whether to enable Sentry error reporting.',
 				format: Boolean,
@@ -254,11 +253,20 @@ module.exports = function(userCfgPath) {
 				format: String,
 
 				// This will throw if the user does not provide a value, but only if Sentry is enabled.
-				default: userConfig.sentry && userConfig.sentry.enabled ? null : '',
+				default: userConfig?.sentry?.enabled ? null : '',
 			},
-		};
-	}
+		},
+	};
 
+	return { ...baseSchema, ...extendedSchema };
+}
+
+// eslint-disable-next-line @typescript-eslint/explicit-function-return-type
+export default function(userCfgPath: string) {
+	const convictSchema = generateConfigSchema(userCfgPath);
+
+	// Load user config if it exists, and merge it
+	const userCfgExists = fs.existsSync(userCfgPath);
 	const convictConfig = convict(convictSchema);
 	if (userCfgExists) {
 		convictConfig.loadFile(userCfgPath);
@@ -270,14 +278,6 @@ module.exports = function(userCfgPath) {
 	const config = convictConfig.getProperties();
 
 	config.baseURL = config.baseURL || `${config.host === '0.0.0.0' ? 'localhost' : config.host}:${config.port}`;
-
-	if (!config.login) {
-		config.login = {};
-	}
-
-	if (!config.sentry) {
-		config.sentry = {};
-	}
 
 	// Create the filtered config
 	const filteredConfig = {
@@ -299,7 +299,7 @@ module.exports = function(userCfgPath) {
 		},
 	};
 
-	if (config.login) {
+	if ('login' in config) {
 		filteredConfig.login = {
 			enabled: config.login.enabled,
 		};
@@ -335,4 +335,4 @@ module.exports = function(userCfgPath) {
 		config: clone(config),
 		filteredConfig: clone(filteredConfig),
 	};
-};
+}

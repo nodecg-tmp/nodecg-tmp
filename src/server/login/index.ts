@@ -1,32 +1,79 @@
-'use strict';
+// Native
+import path from 'path';
+import crypto from 'crypto';
 
-const path = require('path');
-const express = require('express');
-const app = express();
-const { config } = require('../config');
-const cookieParser = require('cookie-parser');
-const session = require('express-session');
-const NedbStore = require('express-nedb-session')(session);
-const passport = require('passport');
-const log = require('../logger')('nodecg/lib/login');
+// Packages
+import express from 'express';
+import passport from 'passport';
+import steamStrategy from 'passport-steam';
+import { Strategy as LocalStrategy } from 'passport-local';
+import jwt from 'express-jwt';
+
+// Ours
+import config from '../config';
+import createLogger from '../logger';
+import * as db from '../database';
+import { User, Token } from '../database';
+
+const log = createLogger('nodecg/lib/login');
 const protocol = (config.ssl && config.ssl.enabled) || config.login.forceHttpsReturn ? 'https' : 'http';
+const app = express();
+
+export default app;
 
 // 2016-03-26 - Lange: I don't know what these do?
 passport.serializeUser((user, done) => done(null, user));
 passport.deserializeUser((obj, done) => done(null, obj));
 
-if (config.login.steam && config.login.steam.enabled) {
-	const SteamStrategy = require('passport-steam').Strategy;
+app.use(
+	jwt({
+		secret: 'shhhhhhared-secret',
+		getToken(req) {
+			if (req?.headers?.authorization?.split(' ')[0] === 'Bearer') {
+				return req.headers.authorization.split(' ')[1];
+			}
+
+			if (req?.query?.token) {
+				return req.query.token;
+			}
+
+			if (req?.query?.key) {
+				return req.query.key;
+			}
+
+			return null;
+		},
+		async isRevoked(_req, payload, done) {
+			try {
+				const tokenId = payload.jti;
+				const database = await db.getConnection();
+				const foundToken = await database
+					.getRepository(Token)
+					.createQueryBuilder('token')
+					.where('token.id = :id', { id: tokenId })
+					.getOne();
+				done(null, Boolean(foundToken));
+			} catch (error) {
+				done(error);
+			}
+		},
+	}).unless({ path: [/^\/(login|authError|logout)/] }),
+);
+
+if (config?.login?.steam?.enabled) {
 	passport.use(
-		new SteamStrategy(
+		steamStrategy(
 			{
 				returnURL: `${protocol}://${config.baseURL}/login/auth/steam`,
 				realm: `${protocol}://${config.baseURL}/login/auth/steam`,
 				apiKey: config.login.steam.apiKey,
 			},
-			(identifier, profile, done) => {
-				profile.allowed = config.login.steam.allowedIds.indexOf(profile.id) > -1;
-
+			(
+				_: unknown,
+				profile: { id: string; allowed: boolean; displayName: string },
+				done: (error: Error | null, profile: any) => void,
+			) => {
+				profile.allowed = config.login.steam.allowedIds.includes(profile.id);
 				if (profile.allowed) {
 					log.info('Granting %s (%s) access', profile.id, profile.displayName);
 				} else {
@@ -39,16 +86,16 @@ if (config.login.steam && config.login.steam.enabled) {
 	);
 }
 
-if (config.login.twitch && config.login.twitch.enabled) {
+if (config?.login?.twitch?.enabled) {
 	const TwitchStrategy = require('passport-twitch-helix').Strategy;
 
 	// The "user:read:email" scope is required. Add it if not present.
-	let scope = config.login.twitch.scope.split(' ');
-	if (scope.indexOf('user:read:email') < 0) {
-		scope.push('user:read:email');
+	const scopesArray = config.login.twitch.scope.split(' ');
+	if (!scopesArray.includes('user:read:email')) {
+		scopesArray.push('user:read:email');
 	}
 
-	scope = scope.join(' ');
+	const concatScopes = scopesArray.join(' ');
 
 	passport.use(
 		new TwitchStrategy(
@@ -56,29 +103,33 @@ if (config.login.twitch && config.login.twitch.enabled) {
 				clientID: config.login.twitch.clientID,
 				clientSecret: config.login.twitch.clientSecret,
 				callbackURL: `${protocol}://${config.baseURL}/login/auth/twitch`,
-				scope,
+				scope: concatScopes,
 			},
-			(accessToken, refreshToken, profile, done) => {
-				profile.allowed = config.login.twitch.allowedUsernames.indexOf(profile.username) > -1;
-
-				if (profile.allowed) {
+			(
+				accessToken: string,
+				refreshToken: string,
+				profile: { username: string },
+				done: (error: Error | null, profile: any) => void,
+			) => {
+				const allowed = config.login.twitch.allowedUsernames.includes(profile.username);
+				if (allowed) {
 					log.info('Granting %s access', profile.username);
-					profile.accessToken = accessToken;
-					profile.refreshToken = refreshToken;
 				} else {
 					log.info('Denying %s access', profile.username);
 				}
 
-				return done(null, profile);
+				return done(null, {
+					...profile,
+					allowed,
+					accessToken: allowed ? accessToken : undefined,
+					refreshToken: allowed ? refreshToken : undefined,
+				});
 			},
 		),
 	);
 }
 
 if (config.login.local && config.login.local.enabled) {
-	const { Strategy: LocalStrategy } = require('passport-local');
-	const crypto = require('crypto');
-
 	const {
 		sessionSecret,
 		local: { allowedUsers },
@@ -92,7 +143,7 @@ if (config.login.local && config.login.local.enabled) {
 				passwordField: 'password',
 				session: false,
 			},
-			(username, password, done) => {
+			(username: string, password: string, done) => {
 				const user = allowedUsers.find(u => u.username === username);
 				let allowed = false;
 
@@ -177,17 +228,15 @@ app.post('/login/local', passport.authenticate('local', { failureRedirect: '/log
 
 app.get('/logout', (req, res) => {
 	app.emit('logout', req.session);
-	req.session.destroy(() => {
+	req.session?.destroy(() => {
 		res.clearCookie('connect.sid', { path: '/' });
 		res.clearCookie('socketToken', { path: '/' });
 		res.redirect('/login');
 	});
 });
 
-function redirectPostLogin(req, res) {
-	const url = req.session.returnTo || '/dashboard';
+function redirectPostLogin(req: express.Request, res: express.Response): void {
+	const url = req.session?.returnTo || '/dashboard';
 	res.redirect(url);
 	app.emit('login', req.session);
 }
-
-module.exports = app;

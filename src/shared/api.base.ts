@@ -1,5 +1,5 @@
 // Ours
-const { version } = require('../../package.json');
+import { version } from '../../package.json';
 
 type AbstractLogger = {
 	name: string;

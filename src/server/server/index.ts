@@ -1,12 +1,10 @@
 // Minimal imports for first setup
 import * as os from 'os';
 import * as Sentry from '@sentry/node';
-import configHelper from '../config';
+import config from '../config';
 import '../util/sentry-config';
+import * as pjson from '../../../package.json';
 
-// eslint-disable-next-line @typescript-eslint/no-var-requires
-const pjson = require('../../../package.json');
-const { config } = configHelper;
 global.exitOnUncaught = config.exitOnUncaught;
 if (config.sentry && config.sentry.enabled) {
 	Sentry.init({
@@ -52,12 +50,12 @@ import { Express as ExpressType } from 'express-serve-static-core';
 // Ours
 import bundleManager = require('../bundle-manager');
 import createLogger from '../logger';
-import tokens from '../login/tokens';
-import UnauthorizedError from '../login/UnauthorizedError';
+import * as tokens from '../login/permissionUtils';
+import UnauthorizedError, { Code as UnauthErrCode } from '../login/UnauthorizedError';
 import { Server } from 'http';
 
 const log = createLogger('nodecg/lib/server');
-const authorizedSockets = {};
+const authorizedSockets = new Map<string, Set<SocketIO.Socket>>();
 let app: ExpressType;
 let server: Server;
 let io: SocketIO.Server;
@@ -84,7 +82,7 @@ const renderTemplate = memoize((content, options) => {
 const emitter = new EventEmitter();
 export default emitter;
 
-export function start() {
+export async function start(): Promise<void> {
 	log.info('Starting NodeCG %s (Running on Node.js %s)', pjson.version, process.version);
 
 	// (Re)create Express app, HTTP(S) & Socket.IO servers
@@ -95,7 +93,7 @@ export function start() {
 	}
 
 	if (config.ssl && config.ssl.enabled) {
-		const sslOpts = {
+		const sslOpts: { key: Buffer; cert: Buffer; passphrase?: string } = {
 			key: fs.readFileSync(config.ssl.keyPath),
 			cert: fs.readFileSync(config.ssl.certificatePath),
 		};
@@ -112,16 +110,13 @@ export function start() {
 		server = require('http').createServer(app);
 	}
 
-	io = socketIo(server);
-	io.sockets.setMaxListeners(64); // Prevent console warnings when many extensions are installed
-
 	// Set up Express
 	log.trace('Setting up Express');
 	app.use(compression());
 	app.use(bodyParser.json());
 	app.use(bodyParser.urlencoded({ extended: true }));
 
-	app.engine('tmpl', (filePath, options, callback) => {
+	app.engine('tmpl', (filePath: string, options: any, callback: any) => {
 		fs.readFile(filePath, (error, content) => {
 			if (error) {
 				return callback(error);
@@ -133,18 +128,18 @@ export function start() {
 
 	if (config.login && config.login.enabled) {
 		log.info('Login security enabled');
-		const login = require('../login');
+		const { default: login } = await import('../login');
 		app.use(login);
-		io.use(tokens.authorize());
+		io.use(tokens.authMiddleware);
 	} else {
-		app.get('/login*', (req, res) => {
+		app.get('/login*', (_, res) => {
 			res.redirect('/dashboard');
 		});
 	}
 
 	const bundlesPaths = [path.join(process.env.NODECG_ROOT, 'bundles')].concat(config.bundles.paths);
 	const cfgPath = path.join(process.env.NODECG_ROOT, 'cfg');
-	bundleManager.init(bundlesPaths, cfgPath, pjson.version, config, Logger);
+	bundleManager.init(bundlesPaths, cfgPath, pjson.version, config);
 	bundleManager.all().forEach(bundle => {
 		// TODO: deprecate this feature once Import Maps are shipped and stable in browsers.
 		// TODO: remove this feature after Import Maps have been around a while (like a year maybe).
@@ -157,7 +152,7 @@ export function start() {
 		}
 	});
 
-	io.on('error', err => {
+	io.on('error', (err: Error) => {
 		if (global.sentryEnabled) {
 			Sentry.captureException(err);
 		}
@@ -186,7 +181,7 @@ export function start() {
 				throw new Error('Room must be a string');
 			}
 
-			if (Object.keys(socket.rooms).indexOf(room) < 0) {
+			if (Object.keys(socket.rooms).includes(room)) {
 				log.trace('Socket %s joined room:', socket.id, room);
 				socket.join(room);
 			}
@@ -197,15 +192,28 @@ export function start() {
 		});
 
 		if (config.login && config.login.enabled) {
-			const { token } = socket;
-			if (!{}.hasOwnProperty.call(authorizedSockets, token)) {
-				authorizedSockets[token] = [];
+			const token = tokens.getTokenForSocket(socket);
+			if (!token) {
+				socket.emit(
+					'error',
+					new UnauthorizedError(UnauthErrCode.InvalidToken, 'No token could be found').serialized,
+				);
+				socket.disconnect(true);
+				return;
 			}
 
-			if (authorizedSockets[token].indexOf(socket) < 0) {
-				authorizedSockets[token].push(socket);
+			if (!authorizedSockets.has(token)) {
+				authorizedSockets.set(token, new Set<SocketIO.Socket>());
 			}
 
+			const socketSet = authorizedSockets.get(token);
+
+			/* istanbul ignore next: should be impossible */
+			if (!socketSet) {
+				throw new Error('socketSet was somehow falsey');
+			}
+
+			socketSet.add(socket);
 			socket.on('disconnect', () => {
 				// Sockets for this token might have already been invalidated
 				if ({}.hasOwnProperty.call(authorizedSockets, token)) {

@@ -2,19 +2,8 @@
 	"root": true,
 	"extends": ["@gamesdonequick/eslint-config", "@gamesdonequick/eslint-config/typescript"],
 	"rules": {
-		"new-cap": [
-			2,
-			{
-				"capIsNewExceptions": [
-					"Polymer",
-					"MutableData",
-					"nodecg.Replicant",
-					"NodeCG.Replicant",
-					"t.context.apis.extension.Replicant",
-					"window.dashboardApi.Replicant"
-				]
-			}
-		],
-		"valid-jsdoc": 0
+		"new-cap": 0,
+		"valid-jsdoc": 0,
+		"@typescript-eslint/camelcase": 0
 	}
 }

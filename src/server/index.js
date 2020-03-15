@@ -17,7 +17,7 @@ if (!process.env.NODECG_ROOT) {
 
 const semver = require('semver');
 const exitHook = require('exit-hook');
-const { engines } = require('../../package.json');
+import { engines } from '../../package.json';
 const nodeVersion = process.versions.node;
 
 if (!semver.satisfies(nodeVersion, engines.node)) {
