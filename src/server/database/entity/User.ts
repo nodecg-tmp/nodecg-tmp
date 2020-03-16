@@ -1,18 +1,25 @@
-import { Entity, PrimaryGeneratedColumn, Column, OneToOne, JoinColumn } from 'typeorm';
-import { Token } from './Token';
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, ManyToMany, JoinTable, OneToMany } from 'typeorm';
+import { Role } from './Role';
+import { Identity } from './Identity';
 
 @Entity()
 export class User {
 	@PrimaryGeneratedColumn('uuid')
 	id: string;
 
-	@Column('simple-array')
-	role_ids: string[];
+	@CreateDateColumn()
+	created_at: number;
 
-	@OneToOne(
-		type => Token,
-		token => token.user,
+	@Column('text')
+	name: string;
+
+	@ManyToMany(() => Role)
+	@JoinTable()
+	roles: Role[];
+
+	@OneToMany(
+		() => Identity,
+		identity => identity.user,
 	)
-	@JoinColumn()
-	token: Token;
+	identities: Identity[];
 }

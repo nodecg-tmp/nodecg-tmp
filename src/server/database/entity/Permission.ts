@@ -1,5 +1,5 @@
-import { Entity, PrimaryGeneratedColumn, Column } from 'typeorm';
-import { Action } from '../Actions';
+import { Entity, PrimaryGeneratedColumn, Column, ManyToMany, JoinTable } from 'typeorm';
+import { Action } from './Action';
 
 @Entity()
 export class Permission {
@@ -7,8 +7,16 @@ export class Permission {
 	id: string;
 
 	@Column('text')
+	name: string;
+
+	@Column('text')
 	entity_id: string;
 
-	@Column('simple-array')
-	authorized_actions: Action[];
+	@ManyToMany(() => Action)
+	@JoinTable()
+	allowed_actions: Action[];
+
+	@ManyToMany(() => Action)
+	@JoinTable()
+	denied_actions: Action[];
 }
