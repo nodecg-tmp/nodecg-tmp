@@ -14,7 +14,7 @@ import { TypeormStore } from 'connect-typeorm';
 import config from '../config';
 import createLogger from '../logger';
 import * as db from '../database';
-import { User, Session } from '../database';
+import { User, Session, Role } from '../database';
 import { Identity } from '../database/entity/Identity';
 
 declare global {
@@ -37,15 +37,35 @@ async function findUserById(id: User['id']): Promise<User | undefined> {
 		.getOne();
 }
 
-async function createUser(userInfo: Pick<User, 'name' | 'roles' | 'identities'>, identity: Identity): Promise<User> {
+async function createUser(userInfo: Pick<User, 'name' | 'roles' | 'identities'>): Promise<User> {
 	const database = await db.getConnection();
-	const insertResult = await database
-		.createQueryBuilder()
-		.insert()
-		.into(User)
-		.values(userInfo)
-		.execute();
-	return insertResult.generatedMaps[0];
+	const manager = database.manager;
+	const qb = database.createQueryBuilder();
+
+	// Make the user
+	const user = manager.create(User, { name: userInfo.name });
+	manager.save(user);
+
+	// Make the relations
+	await qb
+		.relation(User, 'identities')
+		.of(user)
+		.add(userInfo.identities);
+
+	await qb
+		.relation(User, 'roles')
+		.of(user)
+		.add(userInfo.roles);
+
+	return user;
+}
+
+async function createIdentity(identInfo: Pick<Identity, 'provider_type' | 'provider_hash'>): Promise<Identity> {
+	const database = await db.getConnection();
+	const manager = database.manager;
+	const ident = manager.create(Identity, identInfo);
+	manager.save(ident);
+	return ident;
 }
 
 async function findIdent(
@@ -61,16 +81,8 @@ async function findIdent(
 		.getOne();
 }
 
-async function upsertUser(user: User): Promise<User> {
-	return db.upsert(User, user, 'id', {
-		do_not_upsert: ['created_at'],
-	});
-}
-
-async function upsertIdentity(identity: Identity): Promise<User> {
-	return db.upsert(Identity, identity, 'provider_hash', {
-		do_not_upsert: ['created_at'],
-	});
+async function ensureRoles(): Promise<Role[]> {
+	const database = await db.getConnection();
 }
 
 // Required for persistent login sessions.
@@ -113,8 +125,15 @@ if (config?.login?.steam?.enabled) {
 					}
 
 					// Else, make an ident and user.
-
-					const user = doABunchOfUpsertingShit();
+					const ident = await createIdentity({
+						provider_type: 'steam',
+						provider_hash: profile.id,
+					});
+					const user = await createUser({
+						name: profile.displayName,
+						roles: FOO,
+						identities: [ident],
+					});
 					return done(null, user);
 				} catch (error) {
 					done(error);

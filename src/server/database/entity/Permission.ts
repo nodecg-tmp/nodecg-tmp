@@ -1,5 +1,11 @@
-import { Entity, PrimaryGeneratedColumn, Column, ManyToMany, JoinTable } from 'typeorm';
-import { Action } from './Action';
+import { Entity, PrimaryGeneratedColumn, Column, OneToOne, JoinColumn, ManyToOne } from 'typeorm';
+import { Role } from './Role';
+
+export const enum Action {
+	NONE = 0,
+	READ = 1 << 0,
+	WRITE = 1 << 1,
+}
 
 @Entity()
 export class Permission {
@@ -9,14 +15,16 @@ export class Permission {
 	@Column('text')
 	name: string;
 
-	@Column('text')
+	@ManyToOne(
+		() => Role,
+		role => role.permissions,
+	)
+	role: Role;
+
+	@OneToOne(() => Entity)
+	@JoinColumn()
 	entity_id: string;
 
-	@ManyToMany(() => Action)
-	@JoinTable()
-	allowed_actions: Action[];
-
-	@ManyToMany(() => Action)
-	@JoinTable()
-	denied_actions: Action[];
+	@Column('int')
+	actions: number;
 }
