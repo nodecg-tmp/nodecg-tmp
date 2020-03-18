@@ -1,4 +1,4 @@
-export * from './Entity';
+export * from './Identity';
 export * from './Permission';
 export * from './Role';
 export * from './Session';

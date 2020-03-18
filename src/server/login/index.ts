@@ -13,9 +13,8 @@ import { TypeormStore } from 'connect-typeorm';
 // Ours
 import config from '../config';
 import createLogger from '../logger';
-import * as db from '../database';
-import { User, Session, Role } from '../database';
-import { Identity } from '../database/entity/Identity';
+import { User, Session, Role, getConnection } from '../database';
+import { findUser, upsertUser, getSuperUserRole } from '../database/utils';
 
 declare global {
 	namespace Express {
@@ -28,69 +27,12 @@ type StrategyDoneCb = (error: NodeJS.ErrnoException | null, profile?: User) => v
 const log = createLogger('nodecg/lib/login');
 const protocol = (config.ssl && config.ssl.enabled) || config.login.forceHttpsReturn ? 'https' : 'http';
 
-async function findUserById(id: User['id']): Promise<User | undefined> {
-	const database = await db.getConnection();
-	return database
-		.getRepository(User)
-		.createQueryBuilder('user')
-		.where('user.id = :id', { id })
-		.getOne();
-}
-
-async function createUser(userInfo: Pick<User, 'name' | 'roles' | 'identities'>): Promise<User> {
-	const database = await db.getConnection();
-	const manager = database.manager;
-	const qb = database.createQueryBuilder();
-
-	// Make the user
-	const user = manager.create(User, { name: userInfo.name });
-	manager.save(user);
-
-	// Make the relations
-	await qb
-		.relation(User, 'identities')
-		.of(user)
-		.add(userInfo.identities);
-
-	await qb
-		.relation(User, 'roles')
-		.of(user)
-		.add(userInfo.roles);
-
-	return user;
-}
-
-async function createIdentity(identInfo: Pick<Identity, 'provider_type' | 'provider_hash'>): Promise<Identity> {
-	const database = await db.getConnection();
-	const manager = database.manager;
-	const ident = manager.create(Identity, identInfo);
-	manager.save(ident);
-	return ident;
-}
-
-async function findIdent(
-	type: Identity['provider_type'],
-	hash: Identity['provider_hash'],
-): Promise<Identity | undefined> {
-	const database = await db.getConnection();
-	return database
-		.getRepository(Identity)
-		.createQueryBuilder('ident')
-		.where('ident.type = :type', { type })
-		.andWhere('ident.hash = :hash', { hash })
-		.getOne();
-}
-
-async function ensureRoles(): Promise<Role[]> {
-	const database = await db.getConnection();
-}
-
 // Required for persistent login sessions.
 // Passport needs ability to serialize and unserialize users out of session.
 passport.serializeUser<User, User['id']>((user, done) => done(null, user.id));
 passport.deserializeUser<User, User['id']>(async (id, done) => {
 	try {
-		done(null, await findUserById(id));
+		done(null, await findUser(id));
 	} catch (error) {
 		done(error);
 	}
@@ -110,29 +52,20 @@ if (config?.login?.steam?.enabled) {
 				done: StrategyDoneCb,
 			) => {
 				try {
+					const roles: Role[] = [];
 					const allowed = config.login.steam.allowedIds.includes(profile.id);
 					if (allowed) {
 						log.info('Granting %s (%s) access', profile.id, profile.displayName);
+						roles.push(await getSuperUserRole());
 					} else {
 						log.info('Denying %s (%s) access', profile.id, profile.displayName);
 					}
 
-					// Check for ident that matches.
-					// If found, it should have an associated user, so return that.
-					const existingIdent = await findIdent('steam', profile.id);
-					if (existingIdent) {
-						return done(null, existingIdent.user);
-					}
-
-					// Else, make an ident and user.
-					const ident = await createIdentity({
+					const user = await upsertUser({
+						name: profile.displayName,
 						provider_type: 'steam',
 						provider_hash: profile.id,
-					});
-					const user = await createUser({
-						name: profile.displayName,
-						roles: FOO,
-						identities: [ident],
+						roles,
 					});
 					return done(null, user);
 				} catch (error) {
@@ -162,20 +95,32 @@ if (config?.login?.twitch?.enabled) {
 				callbackURL: `${protocol}://${config.baseURL}/login/auth/twitch`,
 				scope: concatScopes,
 			},
-			(accessToken: string, refreshToken: string, profile: { username: string }, done: StrategyDoneCb) => {
-				const allowed = config.login.twitch.allowedUsernames.includes(profile.username);
-				if (allowed) {
-					log.info('Granting %s access', profile.username);
-				} else {
-					log.info('Denying %s access', profile.username);
-				}
+			async (
+				_accessToken: string,
+				_refreshToken: string,
+				profile: { provider: 'twitch'; id: string; username: string; displayName: string; email: string },
+				done: StrategyDoneCb,
+			) => {
+				try {
+					const roles: Role[] = [];
+					const allowed = config.login.twitch.allowedUsernames.includes(profile.username);
+					if (allowed) {
+						log.info('Granting %s access', profile.username);
+						roles.push(await getSuperUserRole());
+					} else {
+						log.info('Denying %s access', profile.username);
+					}
 
-				return done(null, {
-					...profile,
-					allowed,
-					accessToken: allowed ? accessToken : undefined,
-					refreshToken: allowed ? refreshToken : undefined,
-				});
+					const user = await upsertUser({
+						name: profile.displayName,
+						provider_type: 'twitch',
+						provider_hash: profile.id,
+						roles,
+					});
+					return done(null, user);
+				} catch (error) {
+					done(error);
+				}
 			},
 		),
 	);
@@ -195,42 +140,50 @@ if (config.login.local && config.login.local.enabled) {
 				passwordField: 'password',
 				session: false,
 			},
-			(username: string, password: string, done: StrategyDoneCb) => {
-				const user = allowedUsers.find(u => u.username === username);
-				let allowed = false;
+			async (username: string, password: string, done: StrategyDoneCb) => {
+				try {
+					const roles: Role[] = [];
+					const foundUser = allowedUsers.find(u => u.username === username);
+					let allowed = false;
 
-				if (user) {
-					const match = /^([^:]+):(.+)$/.exec(user.password);
-					let expected = user.password;
-					let actual = password;
+					if (foundUser) {
+						const match = /^([^:]+):(.+)$/.exec(foundUser.password);
+						let expected = foundUser.password;
+						let actual = password;
 
-					if (match && hashes.includes(match[1])) {
-						expected = match[2];
-						actual = crypto
-							.createHmac(match[1], sessionSecret)
-							.update(actual, 'utf8')
-							.digest('hex');
+						if (match && hashes.includes(match[1])) {
+							expected = match[2];
+							actual = crypto
+								.createHmac(match[1], sessionSecret)
+								.update(actual, 'utf8')
+								.digest('hex');
+						}
+
+						if (expected === actual) {
+							allowed = true;
+							roles.push(await getSuperUserRole());
+						}
 					}
 
-					if (expected === actual) {
-						allowed = true;
-					}
+					log.info('%s %s access using local auth', allowed ? 'Granting' : 'Denying', username);
+
+					const user = await upsertUser({
+						name: username,
+						provider_type: 'local',
+						provider_hash: username,
+						roles,
+					});
+					return done(null, user);
+				} catch (error) {
+					done(error);
 				}
-
-				log.info('%s %s access using local auth', allowed ? 'Granting' : 'Denying', username);
-
-				return done(null, {
-					provider: 'local',
-					username,
-					allowed,
-				});
 			},
 		),
 	);
 }
 
 export async function createMiddleware(): Promise<express.Application> {
-	const database = await db.getConnection();
+	const database = await getConnection();
 	const sessionRepository = database.getRepository(Session);
 	const app = express();
 	const redirectPostLogin = (req: express.Request, res: express.Response): void => {

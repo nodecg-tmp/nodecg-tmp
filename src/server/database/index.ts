@@ -1,7 +1,6 @@
 import 'reflect-metadata';
 import { createConnection, Connection } from 'typeorm';
 export * from './entity';
-export { default as upsert } from './upsert';
 
 let memoizedConnection: Connection;
 export async function getConnection(): Promise<Connection> {

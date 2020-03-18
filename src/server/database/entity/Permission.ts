@@ -1,4 +1,4 @@
-import { Entity, PrimaryGeneratedColumn, Column, OneToOne, JoinColumn, ManyToOne } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, ManyToOne } from 'typeorm';
 import { Role } from './Role';
 
 export const enum Action {
@@ -21,9 +21,7 @@ export class Permission {
 	)
 	role: Role;
 
-	@OneToOne(() => Entity)
-	@JoinColumn()
-	entity_id: string;
+	entityId: string;
 
 	@Column('int')
 	actions: number;
