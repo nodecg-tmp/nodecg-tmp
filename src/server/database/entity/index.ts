@@ -1,3 +1,4 @@
+export * from './ApiKey';
 export * from './Identity';
 export * from './Permission';
 export * from './Role';

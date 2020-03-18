@@ -16,12 +16,6 @@ import createLogger from '../logger';
 import { User, Session, Role, getConnection } from '../database';
 import { findUser, upsertUser, getSuperUserRole } from '../database/utils';
 
-declare global {
-	namespace Express {
-		interface User extends User {}
-	}
-}
-
 type StrategyDoneCb = (error: NodeJS.ErrnoException | null, profile?: User) => void;
 
 const log = createLogger('nodecg/lib/login');

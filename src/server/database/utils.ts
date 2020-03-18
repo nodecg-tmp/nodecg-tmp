@@ -1,4 +1,5 @@
 import { getConnection, User, Role, Identity } from '../database';
+import { ApiKey } from './entity/ApiKey';
 
 export async function findUser(id: User['id']): Promise<User | undefined> {
 	const database = await getConnection();
@@ -44,17 +45,21 @@ export async function upsertUser({
 			provider_type,
 			provider_hash,
 		});
+		const apiKey = await createApiKey();
 		user = manager.create(User, {
 			name,
 			identities: [ident],
+			apiKeys: [apiKey],
 		});
 	}
 
 	// Always update the roles, regardless of if we are making a new user or updating an existing one.
 	user.roles = roles;
-	manager.save(user);
+	return manager.save(user);
+}
 
-	return user;
+export function isSuperUser(user: User): boolean {
+	return Boolean(user.roles?.find(role => role.name === 'superuser'));
 }
 
 async function findRole(name: Role['name']): Promise<Role | undefined> {
@@ -69,8 +74,14 @@ async function createIdentity(identInfo: Pick<Identity, 'provider_type' | 'provi
 	const database = await getConnection();
 	const manager = database.manager;
 	const ident = manager.create(Identity, identInfo);
-	manager.save(ident);
-	return ident;
+	return manager.save(ident);
+}
+
+async function createApiKey(): Promise<ApiKey> {
+	const database = await getConnection();
+	const manager = database.manager;
+	const apiKey = manager.create(ApiKey);
+	return manager.save(apiKey);
 }
 
 async function findIdent(

@@ -95,5 +95,3 @@ function restoreConnection(nsp, socket): void {
 		nsp.connected[socket.id] = socket;
 	}
 }
-
-function 

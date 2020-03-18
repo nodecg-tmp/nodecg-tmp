@@ -1,6 +1,7 @@
 /* eslint-disable complexity */
 // Native
 import fs from 'fs';
+import os from 'os';
 
 // Packages
 import cheerio from 'cheerio';
@@ -10,6 +11,8 @@ import semver from 'semver';
 import * as bundles from '../bundle-manager';
 import config, { filteredConfig } from '../config';
 import { noop } from '../util';
+import * as pjson from '../../../package.json';
+import { bundleMetadata } from './sentry-config';
 
 type Options = {
 	standalone: boolean;
@@ -108,12 +111,20 @@ export default function(
 			}
 		} else if (resourceType === 'graphic') {
 			if (config.sentry && config.sentry.enabled) {
+				const baseSentryConfig = {
+					dsn: config.sentry.dsn,
+					serverName: os.hostname(),
+					release: pjson.version,
+				};
 				scripts.unshift(
-					'<script src="/node_modules/raven-js/dist/raven.min.js"></script>',
-					`<script>
-						Raven.config('${config.sentry.dsn}', ${JSON.stringify(ravenConfig)}).install();
+					'<script src="/node_modules/@sentry/browser/dist/index.js"></script>',
+					`<script type="module">
+						Sentry.init(${JSON.stringify(baseSentryConfig)});
+						Sentry.configureScope(scope => {
+							scope.setExtra('bundles', ${JSON.stringify(bundleMetadata)});
+						});
 						window.addEventListener('unhandledrejection', function (err) {
-							Raven.captureException(err.reason);
+							Sentry.captureException(err.reason);
 						});
 					</script>`,
 				);

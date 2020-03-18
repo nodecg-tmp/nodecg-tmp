@@ -2,30 +2,30 @@
 import * as Sentry from '@sentry/node';
 
 // Ours
-import bundleManager from '../bundle-manager';
+import bundleManager, { all as getAllBundles } from '../bundle-manager';
 
-let bundleMetadata: Array<{ name: string; git: object; version: string }>;
+export const bundleMetadata: Array<{ name: string; git: NodeCG.Bundle.GitData; version: string }> = [];
 
 // When the bundle manager first loads up the bundles, a
-bundleManager.on('init', bundles => {
+bundleManager.on('init', () => {
 	Sentry.configureScope(scope => {
-		bundleMetadata = bundles.map(bundle => {
-			return {
+		getAllBundles().forEach(bundle => {
+			bundleMetadata.push({
 				name: bundle.name,
 				git: bundle.git,
 				version: bundle.version,
-			};
+			});
 		});
 		scope.setExtra('bundles', bundleMetadata);
 	});
 });
 
 bundleManager.on('gitChanged', bundle => {
-	const foo = bundleMetadata.find(data => data.name === bundle.name);
-	if (!foo) {
+	const metadataToUpdate = bundleMetadata.find(data => data.name === bundle.name);
+	if (!metadataToUpdate) {
 		return;
 	}
 
-	foo.git = bundle.git;
-	foo.version = bundle.version;
+	metadataToUpdate.git = bundle.git;
+	metadataToUpdate.version = bundle.version;
 });
