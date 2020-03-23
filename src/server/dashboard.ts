@@ -1,20 +1,18 @@
-'use strict';
-
 // Native
-const fs = require('fs');
-const path = require('path');
+import fs from 'fs';
+import path from 'path';
 
 // Packages
-const clone = require('clone');
-const express = require('express');
+import clone from 'clone';
+import express from 'express';
 
 // Ours
-const bundles = require('./bundle-manager');
-const configHelper = require('./config/index');
-const log = require('./logger')('nodecg/lib/dashboard');
-const ncgUtils = require('./util/index');
-const ravenConfig = require('./util/sentry-config');
+import bundles from './bundle-manager';
+import configHelper from './config/index';
+import createLogger from './logger';
+import * as ncgUtils from './util/index';
 
+const log = createLogger('nodecg/lib/dashboard');
 const app = express();
 const INSTRUMENTED_PATH = path.join(__dirname, '../instrumented');
 const BUILD_PATH = path.join(__dirname, '../build/client');
@@ -144,7 +142,6 @@ function getDashboardContext() {
 		publicConfig: configHelper.filteredConfig,
 		privateConfig: configHelper.config,
 		workspaces: parseWorkspaces(),
-		ravenConfig,
 	};
 }
 

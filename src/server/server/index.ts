@@ -1,7 +1,7 @@
 // Minimal imports for first setup
 import * as os from 'os';
 import * as Sentry from '@sentry/node';
-import config from '../config';
+import config, { filteredConfig } from '../config';
 import '../util/sentry-config';
 import * as pjson from '../../../package.json';
 
@@ -43,23 +43,18 @@ import semver from 'semver';
 import template from 'lodash.template';
 import memoize from 'fast-memoize';
 import transformMiddleware from 'express-transform-bare-module-specifiers';
-import socketIo from 'socket.io';
 import compression from 'compression';
-import { Express as ExpressType } from 'express-serve-static-core';
+import { Server } from 'http';
+import SocketIO from 'socket.io';
 
 // Ours
 import bundleManager = require('../bundle-manager');
 import createLogger from '../logger';
-import * as tokens from '../login/permissionUtils';
-import UnauthorizedError, { Code as UnauthErrCode } from '../login/UnauthorizedError';
-import { Server } from 'http';
+import socketAuthMiddleware from '../login/socketAuthMiddleware';
+import socketApiMiddleware from './socketApiMiddleware';
 
+const io = SocketIO();
 const log = createLogger('nodecg/lib/server');
-const authorizedSockets = new Map<string, Set<SocketIO.Socket>>();
-let app: ExpressType;
-let server: Server;
-let io: SocketIO.Server;
-let extensionManager;
 
 // Check for updates
 fetch('http://registry.npmjs.org/nodecg/latest')
@@ -82,16 +77,17 @@ const renderTemplate = memoize((content, options) => {
 const emitter = new EventEmitter();
 export default emitter;
 
-export async function start(): Promise<void> {
+export async function start(): Promise<() => void> {
 	log.info('Starting NodeCG %s (Running on Node.js %s)', pjson.version, process.version);
 
 	// (Re)create Express app, HTTP(S) & Socket.IO servers
-	app = express();
+	const app = express();
 
 	if (global.sentryEnabled) {
 		app.use(Sentry.Handlers.requestHandler());
 	}
 
+	let server: Server;
 	if (config.ssl && config.ssl.enabled) {
 		const sslOpts: { key: Buffer; cert: Buffer; passphrase?: string } = {
 			key: fs.readFileSync(config.ssl.keyPath),
@@ -128,9 +124,9 @@ export async function start(): Promise<void> {
 
 	if (config.login && config.login.enabled) {
 		log.info('Login security enabled');
-		const { default: login } = await import('../login');
-		app.use(login);
-		io.use(tokens.authMiddleware);
+		const login = await import('../login');
+		app.use(await login.createMiddleware());
+		io.use(socketAuthMiddleware);
 	} else {
 		app.get('/login*', (_, res) => {
 			res.redirect('/dashboard');
@@ -160,116 +156,18 @@ export async function start(): Promise<void> {
 		log.error(err.stack);
 	});
 
-	io.on('connection', socket => {
-		log.trace('New socket connection: ID %s with IP %s', socket.id, socket.handshake.address);
-
-		socket.on('error', err => {
-			if (global.sentryEnabled) {
-				Sentry.captureException(err);
-			}
-
-			log.error(err.stack);
-		});
-
-		socket.on('message', data => {
-			log.debug('Socket %s sent a message:', socket.id, data);
-			io.emit('message', data);
-		});
-
-		socket.on('joinRoom', (room, cb) => {
-			if (typeof room !== 'string') {
-				throw new Error('Room must be a string');
-			}
-
-			if (Object.keys(socket.rooms).includes(room)) {
-				log.trace('Socket %s joined room:', socket.id, room);
-				socket.join(room);
-			}
-
-			if (typeof cb === 'function') {
-				cb();
-			}
-		});
-
-		if (config.login && config.login.enabled) {
-			const token = tokens.getTokenForSocket(socket);
-			if (!token) {
-				socket.emit(
-					'error',
-					new UnauthorizedError(UnauthErrCode.InvalidToken, 'No token could be found').serialized,
-				);
-				socket.disconnect(true);
-				return;
-			}
-
-			if (!authorizedSockets.has(token)) {
-				authorizedSockets.set(token, new Set<SocketIO.Socket>());
-			}
-
-			const socketSet = authorizedSockets.get(token);
-
-			/* istanbul ignore next: should be impossible */
-			if (!socketSet) {
-				throw new Error('socketSet was somehow falsey');
-			}
-
-			socketSet.add(socket);
-			socket.on('disconnect', () => {
-				// Sockets for this token might have already been invalidated
-				if ({}.hasOwnProperty.call(authorizedSockets, token)) {
-					const idx = authorizedSockets[token].indexOf(socket);
-					if (idx >= 0) {
-						authorizedSockets[token].splice(idx, 1);
-					}
-				}
-			});
-
-			socket.on('regenerateToken', (token, cb) => {
-				log.debug('Socket %s requested a new token:', socket.id);
-				cb = cb || function() {};
-
-				tokens.regenerate(token, (err, newToken) => {
-					if (err) {
-						log.error(err.stack);
-						cb(err);
-						return;
-					}
-
-					cb(null, newToken);
-
-					function invalidate() {
-						// Disconnect all sockets using this token
-						if (Array.isArray(authorizedSockets[token])) {
-							const sockets = authorizedSockets[token].slice(0);
-							sockets.forEach(socket => {
-								socket.error(
-									new UnauthorizedError('token_invalidated', {
-										message: 'This token has been invalidated',
-									}).data,
-								);
-
-								socket.disconnect(true);
-							});
-						}
-					}
-
-					// TODO: Why is this on a timeout? If it's really needed, explain why.
-					setTimeout(invalidate, 500);
-				});
-			});
-		}
-	});
+	io.use(socketApiMiddleware);
 
 	log.trace(`Attempting to listen on ${config.host}:${config.port}`);
 	server.on('error', err => {
-		switch (err.code) {
+		switch ((err as any).code) {
 			case 'EADDRINUSE':
 				if (process.env.NODECG_TEST) {
 					return;
 				}
 
 				log.error(
-					`[server.js] Listen ${config.host}:${config.port} in use, is NodeCG already running? NodeCG will now exit.`,
+					`Listen ${config.host}:${config.port} in use, is NodeCG already running? NodeCG will now exit.`,
 				);
 				break;
 			default:
@@ -280,28 +178,34 @@ export async function start(): Promise<void> {
 		emitter.emit('error', err);
 	});
 
+	if (global.sentryEnabled) {
+		log.trace('Starting sentry helper lib');
+		const sentryHelpers = await import('../util/sentry-config');
+		app.use(sentryHelpers.app);
+	}
+
 	log.trace('Starting graphics lib');
-	const graphics = require('../graphics');
+	const graphics = await import('../graphics');
 	app.use(graphics);
 
 	log.trace('Starting dashboard lib');
-	const dashboard = require('../dashboard');
+	const dashboard = await import('../dashboard.ts');
 	app.use(dashboard);
 
 	log.trace('Starting mounts lib');
-	const mounts = require('../mounts');
-	app.use(mounts);
+	const mounts = await import('../mounts');
+	app.use(mounts.default);
 
 	log.trace('Starting bundle sounds lib');
-	const sounds = require('../sounds');
+	const sounds = await import('../sounds');
 	app.use(sounds);
 
 	log.trace('Starting bundle assets lib');
-	const assets = require('../assets');
+	const assets = await import('../assets');
 	app.use(assets);
 
 	log.trace('Starting bundle shared sources lib');
-	const sharedSources = require('../shared-sources');
+	const sharedSources = await import('../shared-sources');
 	app.use(sharedSources);
 
 	if (global.sentryEnabled) {
@@ -322,7 +226,7 @@ export async function start(): Promise<void> {
 	});
 
 	// Set up "bundles" Replicant.
-	const Replicant = require('../replicant');
+	const Replicant = await import('../replicant');
 	const bundlesReplicant = new Replicant('bundles', 'nodecg', {
 		schemaPath: path.resolve(__dirname, '../../schemas/bundles.json'),
 		persistent: false,
@@ -336,7 +240,7 @@ export async function start(): Promise<void> {
 	bundleManager.on('bundleRemoved', updateBundlesReplicant);
 	updateBundlesReplicant();
 
-	extensionManager = require('./extensions');
+	extensionManager = await import('./extensions');
 	extensionManager.init();
 	emitter.emit('extensionsLoaded');
 
@@ -351,11 +255,16 @@ export async function start(): Promise<void> {
 		},
 		() => {
 			if (process.env.NODECG_TEST) {
-				const { port } = server.address();
+				const addrInfo = server.address();
+				if (typeof addrInfo !== 'object' || addrInfo === null) {
+					throw new Error("couldn't get port number");
+				}
+
+				const { port } = addrInfo;
 				log.warn(`Test mode active, using automatic listen port: ${port}`);
-				configHelper.config.port = port;
-				configHelper.filteredConfig.port = port;
-				process.env.NODECG_TEST_PORT = port;
+				config.port = port;
+				filteredConfig.port = port;
+				process.env.NODECG_TEST_PORT = String(port);
 			}
 
 			const protocol = config.ssl && config.ssl.enabled ? 'https' : 'http';
@@ -363,28 +272,31 @@ export async function start(): Promise<void> {
 			emitter.emit('started');
 		},
 	);
+
+	/**
+	 * The stop/shutdown function.
+	 */
+	return () => {
+		if (server) {
+			server.close();
+		}
+
+		if (io) {
+			io.close();
+		}
+
+		require('../replicator').saveAllReplicants();
+
+		extensionManager = null;
+		io = null;
+		server = null;
+		app = null;
+
+		emitter.emit('stopped');
+	};
 }
 
-export function stop(): void {
-	if (server) {
-		server.close();
-	}
-
-	if (io) {
-		io.close();
-	}
-
-	require('../replicator').saveAllReplicants();
-
-	extensionManager = null;
-	io = null;
-	server = null;
-	app = null;
-
-	emitter.emit('stopped');
-}
-
-export function getExtensions() {
+export function getExtensions(): { [k: string]: unknown } {
 	/* istanbul ignore else */
 	if (extensionManager) {
 		return extensionManager.getExtensions();
@@ -394,10 +306,12 @@ export function getExtensions() {
 	return {};
 }
 
-export function getIO(): SocketIO.Server {
+export function getIO(): SocketIO.Server | null {
 	return io;
 }
 
-export function mount(...args): void {
-	app.use(...args);
+export function mount(...handlers: express.RequestHandler[]): void {
+	if (app) {
+		app.use(...handlers);
+	}
 }

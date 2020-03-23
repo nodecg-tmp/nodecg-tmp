@@ -76,7 +76,7 @@ test.serial('token invalidation should show an UnauthorizedError on open pages',
 	await logIn();
 	const page = await initGraphic();
 	await page.evaluate(() => {
-		window.socket.emit('regenerateToken', window.token);
+		window.socket.emit('regenerateToken');
 	});
 	await page.waitForFunction(
 		validUrl => location.href.startsWith(validUrl),

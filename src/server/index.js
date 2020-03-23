@@ -57,8 +57,8 @@ const server = require('./server')
 		}
 	});
 
-exitHook(() => {
-	server.stop();
-});
+const stopServer = server.start();
 
-server.start();
+exitHook(() => {
+	stopServer();
+});

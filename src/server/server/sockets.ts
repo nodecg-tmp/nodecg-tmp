@@ -1,10 +1,6 @@
 // Packages
 import socketIo from 'socket.io';
 
-const enum Scope {
-	Authed = 'authorized',
-}
-
 const io = socketIo(server);
 io.sockets.setMaxListeners(64); // Prevent console warnings when many extensions are installed
 

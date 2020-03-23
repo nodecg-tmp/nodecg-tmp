@@ -1,20 +1,38 @@
 // Packages
-const clone = require('clone');
-const ptr = require('json-ptr');
+import clone from 'clone';
+import ptr from 'json-ptr';
 
 // Crimes
-const jsonSchemaLibTypeOf = require('json-schema-lib/lib/util/typeOf');
-const jsonSchemaStripHash = require('json-schema-lib/lib/util/stripHash');
+import jsonSchemaLibTypeOf = require('json-schema-lib/lib/util/typeOf');
+import jsonSchemaStripHash = require('json-schema-lib/lib/util/stripHash');
 
-function replaceRefs(obj, currentFile, allFiles) {
-	const type = jsonSchemaLibTypeOf(obj);
+type File = {
+	url: string;
+	data: UnknownObject;
+	schema: {
+		plugins: {
+			resolveURL(paths: { from: string; to: string }): string;
+		};
+	};
+};
+
+type UnknownObject = { [k: string]: unknown; [k: number]: unknown };
+type FileReference = { $ref: string } & UnknownObject;
+type PointerReference = { $ref: string } & UnknownObject;
+
+/**
+ * Mutates an object in place, replacing all its JSON Refs with their dereferenced values.
+ */
+export default function replaceRefs(inputObj: unknown, currentFile: File, allFiles: File[]): UnknownObject | undefined {
+	const type = jsonSchemaLibTypeOf(inputObj);
 	if (!type.isPOJO && !type.isArray) {
 		return;
 	}
 
+	const obj = inputObj as UnknownObject;
 	if (type.isPOJO) {
-		let dereferencedData;
-		let referenceFile;
+		let dereferencedData: UnknownObject | undefined;
+		let referenceFile: File | undefined;
 		if (isFileReference(obj)) {
 			const referenceUrl = resolveFileReference(obj.$ref, currentFile);
 			referenceFile = allFiles.find(file => {
@@ -52,20 +70,14 @@ function replaceRefs(obj, currentFile, allFiles) {
 			}
 
 			// Crawl this POJO or Array, looking for nested JSON References
-			const keys = Object.keys(dereferencedData);
-			for (let i = 0; i < keys.length; i++) {
-				const key = keys[i];
-				const value = obj[key];
-				replaceRefs(value, referenceFile, allFiles);
+			for (const value of Object.values(dereferencedData)) {
+				replaceRefs(value, currentFile, allFiles);
 			}
 		}
 	}
 
 	// Crawl this POJO or Array, looking for nested JSON References
-	const keys = Object.keys(obj);
-	for (let i = 0; i < keys.length; i++) {
-		const key = keys[i];
-		const value = obj[key];
+	for (const value of Object.values(obj)) {
 		replaceRefs(value, currentFile, allFiles);
 	}
 
@@ -79,8 +91,8 @@ function replaceRefs(obj, currentFile, allFiles) {
  * @param {*} value - The value to inspect
  * @returns {boolean}
  */
-function isFileReference(value) {
-	return typeof value.$ref === 'string' && value.$ref[0] !== '#';
+function isFileReference(value: UnknownObject): value is FileReference {
+	return typeof value.$ref === 'string' && !value.$ref.startsWith('#');
 }
 
 /**
@@ -89,8 +101,8 @@ function isFileReference(value) {
  * @param {*} value - The value to inspect
  * @returns {boolean}
  */
-function isPointerReference(value) {
-	return typeof value.$ref === 'string' && value.$ref[0] === '#';
+function isPointerReference(value: UnknownObject): value is PointerReference {
+	return typeof value.$ref === 'string' && value.$ref.startsWith('#');
 }
 
 /**
@@ -100,7 +112,7 @@ function isPointerReference(value) {
  * @param {string} url - The JSON Reference URL (may be absolute or relative)
  * @param {File} file - The file that the JSON Reference is in
  */
-function resolveFileReference(url, file) {
+function resolveFileReference(url: string, file: File): string {
 	const { schema } = file;
 
 	// Remove any hash from the URL, since this URL represents the WHOLE file, not a fragment of it
@@ -110,8 +122,6 @@ function resolveFileReference(url, file) {
 	return schema.plugins.resolveURL({ from: file.url, to: url });
 }
 
-function resolvePointerReference(obj, ref) {
-	return ptr.get(obj, ref);
+function resolvePointerReference(obj: object, ref: string): UnknownObject {
+	return ptr.get(obj, ref) as UnknownObject;
 }
-
-module.exports = replaceRefs;

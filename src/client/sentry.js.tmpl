@@ -1,0 +1,11 @@
+import * as Sentry from '/node_modules/@sentry/browser/esm/index.js';
+
+Sentry.init(<%= JSON.stringify(baseSentryConfig) %>);
+Sentry.configureScope(scope => {
+	scope.setExtra('bundles', <%= JSON.stringify(bundleMetadata) %>);
+});
+window.addEventListener('unhandledrejection', function (err) {
+	Sentry.captureException(err.reason);
+});
+
+window.Sentry = Sentry;

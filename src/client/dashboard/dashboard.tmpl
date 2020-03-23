@@ -21,15 +21,7 @@
 			Object.freeze(window.__renderData__);
 		</script>
 
-		<% if (privateConfig.sentry && privateConfig.sentry.enabled) { %>
-			<script src="/node_modules/raven-js/dist/raven.min.js"></script>
-			<script type="text/javascript">
-				Raven.config('<%- privateConfig.sentry.publicDsn %>', <%= JSON.stringify(ravenConfig) %>).install();
-				window.addEventListener('unhandledrejection', function (err) {
-					Raven.captureException(err.reason);
-				});
-			</script>
-		<% } %>
+		<script src="/sentry.js" type="module"></script
 
 		<!-- Register service worker -->
 		<script type="text/javascript">

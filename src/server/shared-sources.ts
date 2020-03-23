@@ -1,19 +1,17 @@
 // Native
-const path = require('path');
+import path from 'path';
 
 // Packages
-const express = require('express');
+import express from 'express';
 
 // Ours
-const log = require('./logger')('nodecg/lib/dashboard');
-const bundles = require('./bundle-manager');
-const ncgUtils = require('./util');
+import * as bundles from './bundle-manager';
+import { authCheck } from './util';
 
 const app = express();
+export default app;
 
-log.trace('Adding Express routes');
-
-app.get('/bundles/:bundleName/shared/*', ncgUtils.authCheck, (req, res, next) => {
+app.get('/bundles/:bundleName/shared/*', authCheck, (req, res, next) => {
 	const { bundleName } = req.params;
 	const bundle = bundles.find(bundleName);
 	if (!bundle) {
@@ -23,10 +21,9 @@ app.get('/bundles/:bundleName/shared/*', ncgUtils.authCheck, (req, res, next) =>
 
 	// Essentially behave like express.static
 	// Serve up files with no extra logic
-
 	const resName = req.params[0];
 	const fileLocation = path.join(bundle.dir, 'shared', resName);
-	res.sendFile(fileLocation, err => {
+	res.sendFile(fileLocation, (err: any) => {
 		if (err) {
 			if (err.code === 'ENOENT') {
 				return next();
@@ -39,5 +36,3 @@ app.get('/bundles/:bundleName/shared/*', ncgUtils.authCheck, (req, res, next) =>
 		}
 	});
 });
-
-module.exports = app;

@@ -30,17 +30,20 @@ export const setup = (nodecgConfigName = 'nodecg.json') => {
 	fse.copySync('test/fixtures/nodecg-core/db', path.join(tempFolder, 'db'));
 
 	const server = require(path.resolve(__dirname, '../../lib/server'));
+	let stopServer;
 
 	test.before(async () => {
 		await new Promise((resolve, reject) => {
 			server.on('started', resolve);
 			server.on('error', reject);
-			server.start();
+			stopServer = server.start();
 		});
 	});
 
 	test.after.always(() => {
-		server.stop();
+		if (stopServer) {
+			stopServer();
+		}
 	});
 	test.beforeEach(t => {
 		t.context.server = server;

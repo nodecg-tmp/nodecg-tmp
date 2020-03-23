@@ -18,13 +18,12 @@ const emitter = new EventEmitter();
 export default emitter;
 
 export function init(): void {
-	// TODO: Some of what's happening in here has nothing to do with extensions
 	log.trace('Starting extension mounting');
 
 	// Prevent us from messing with other listeners of this event
 	const allBundles = bundles.all();
 
-	// Track which bundleManager we know are fully loaded (extension and all)
+	// Track which bundles we know are fully loaded (extension and all)
 	const fullyLoaded = [];
 
 	while (allBundles.length > 0) {

@@ -5,7 +5,7 @@ import '@polymer/paper-card/paper-card.js';
 import '@polymer/paper-dialog/paper-dialog.js';
 import '@polymer/paper-toast/paper-toast.js';
 import * as Polymer from '@polymer/polymer';
-import Clipboard from 'clipboard'
+import Clipboard from 'clipboard';
 class NcgSettings extends Polymer.PolymerElement {
 	static get template() {
 		return Polymer.html`
@@ -146,7 +146,6 @@ class NcgSettings extends Polymer.PolymerElement {
 	resetKey() {
 		window.socket.emit(
 			'regenerateToken',
-			window.token,
 			/* istanbul ignore next */ err => {
 				if (err) {
 					console.error(err);

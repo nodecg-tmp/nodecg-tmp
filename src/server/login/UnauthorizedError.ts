@@ -3,6 +3,7 @@ export const enum Code {
 	CredentialsRequired = 'credentials_required',
 	InternalError = 'internal_error',
 	InvalidToken = 'invalid_token',
+	TokenRevoked = 'token_invalidated',
 }
 
 export default class UnauthorizedError extends Error {
