@@ -25,7 +25,7 @@ import { LoggerInterface } from '../logger';
 
 const REPLICANTS_ROOT = path.join(process.env.NODECG_ROOT, 'db/replicants');
 
-class Replicant<T> extends EventEmitter {
+export default class Replicant<T> extends EventEmitter {
 	name: string;
 
 	namespace: string;
@@ -252,5 +252,3 @@ class Replicant<T> extends EventEmitter {
 		this._operationQueue = [];
 	}
 }
-
-module.exports = Replicant;

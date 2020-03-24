@@ -26,13 +26,11 @@ export default class AssetManager {
 
 	readonly assetsRoot = path.join(process.env.NODECG_ROOT, 'assets');
 
-	readonly collectionsRep: Replicant;
+	readonly collectionsRep: Replicant<Collection[]>;
 
 	readonly app: Express.Application;
 
-	private readonly _repsByNamespace = new Map<string, Map<string, Replicant>>();
-
-	private readonly _collections: Collection[] = [];
+	private readonly _repsByNamespace = new Map<string, Map<string, Replicant<AssetFile[]>>>();
 
 	constructor(replicator: Replicator) {
 		// Create assetsRoot folder if it does not exist.
@@ -46,7 +44,7 @@ export default class AssetManager {
 			persistent: false,
 		});
 
-		const { collections, watchPatterns } = this._computeCollections(bundlesLib.all());
+		const { watchPatterns } = this._computeCollections(bundlesLib.all());
 		this._setupWatcher(watchPatterns);
 		this.app = this._setupExpress();
 	}
@@ -76,9 +74,9 @@ export default class AssetManager {
 
 		collections.forEach(({ name, categories }) => {
 			const namespacedAssetsPath = this._calcNamespacedAssetsPath(name);
-			const collectionReps = new Map<string, Replicant>();
+			const collectionReps = new Map<string, Replicant<AssetFile[]>>();
 			this._repsByNamespace.set(name, collectionReps);
-			this.collectionsRep.value.push({ name, categories });
+			this.collectionsRep.value!.push({ name, categories });
 
 			for (const category of categories) {
 				/* istanbul ignore next: Simple directory creation. */
@@ -89,7 +87,7 @@ export default class AssetManager {
 
 				collectionReps.set(
 					category.name,
-					new Replicant(`assets:${category.name}`, name, {
+					new Replicant<AssetFile[]>(`assets:${category.name}`, name, {
 						defaultValue: [],
 						persistent: false,
 					}),
@@ -142,10 +140,9 @@ export default class AssetManager {
 					deferredFiles.set(filepath, uploadedFile);
 					this._resolveDeferreds(deferredFiles);
 				} else {
-					const nspReps = this._repsByNamespace.get(uploadedFile.namespace);
-					if (nspReps) {
-						const rep = nspReps.get(uploadedFile.category);
-						rep.value.push(uploadedFile);
+					const rep = this._getCollectRep(uploadedFile.namespace, uploadedFile.category);
+					if (rep) {
+						rep.value!.push(uploadedFile);
 					}
 				}
 			});
@@ -164,24 +161,31 @@ export default class AssetManager {
 					}
 
 					const newUploadedFile = new AssetFile(filepath, sum);
-					const rep = replicantsByNamespace[newUploadedFile.namespace][newUploadedFile.category];
-					const index = rep.value.findIndex(uf => uf.url === newUploadedFile.url);
+					const rep = this._getCollectRep(newUploadedFile.namespace, newUploadedFile.category);
+					if (!rep) {
+						throw new Error('should have had a replicant here');
+					}
 
+					const index = rep.value!.findIndex(uf => uf.url === newUploadedFile.url);
 					if (index > -1) {
-						rep.value.splice(index, 1, newUploadedFile);
+						rep.value!.splice(index, 1, newUploadedFile);
 					} else {
-						rep.value.push(newUploadedFile);
+						rep.value!.push(newUploadedFile);
 					}
 				});
 			});
 		});
 
 		watcher.on('unlink', filepath => {
-			const deletedFile = new AssetFile(filepath);
-			const rep = replicantsByNamespace[deletedFile.namespace][deletedFile.category];
-			rep.value.some((assetFile, index) => {
+			const deletedFile = new AssetFile(filepath, 'temp');
+			const rep = this._getCollectRep(deletedFile.namespace, deletedFile.category);
+			if (!rep) {
+				return;
+			}
+
+			rep.value!.some((assetFile, index) => {
 				if (assetFile.url === deletedFile.url) {
-					rep.value.splice(index, 1);
+					rep.value!.splice(index, 1);
 					this.log.debug('"%s" was deleted', deletedFile.url);
 					return true;
 				}
@@ -316,9 +320,25 @@ export default class AssetManager {
 
 		if (!foundNull) {
 			deferredFiles.forEach(uploadedFile => {
-				replicantsByNamespace[uploadedFile.namespace][uploadedFile.category].value.push(uploadedFile);
+				if (!uploadedFile) {
+					return;
+				}
+
+				const rep = this._getCollectRep(uploadedFile.namespace, uploadedFile.category);
+				if (rep) {
+					rep.value!.push(uploadedFile);
+				}
 			});
 			deferredFiles.clear();
 		}
+	}
+
+	private _getCollectRep(namespace: string, category: string): Replicant<AssetFile[]> | undefined {
+		const nspReps = this._repsByNamespace.get(namespace);
+		if (nspReps) {
+			return nspReps.get(category);
+		}
+
+		return undefined;
 	}
 }
