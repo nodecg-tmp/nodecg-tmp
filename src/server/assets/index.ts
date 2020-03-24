@@ -11,270 +11,314 @@ import sha1File from 'sha1-file';
 // Ours
 import AssetFile from './AssetFile';
 import { authCheck, debounceName } from '../util';
-import bundles from '../bundle-manager';
+import * as bundlesLib from '../bundle-manager';
 import createLogger from '../logger';
 import Replicant from '../replicant';
+import Replicator from '../replicator';
 
 type Collection = {
 	name: string;
-	categories: string[];
+	categories: NodeCG.Bundle.AssetCategory[];
 };
 
-const log = createLogger('nodecg/lib/assets');
-const app = express();
-const ASSETS_ROOT = path.join(process.env.NODECG_ROOT, 'assets');
-const collectionsRep = new Replicant('collections', '_assets', { defaultValue: [], persistent: false });
-const replicantsByNamespace = {};
-const watchPatterns: string[] = [];
-const upload = multer({
-	storage: multer.diskStorage({
-		destination: ASSETS_ROOT,
-		filename(req, file, cb) {
-			cb(null, `${req.params.namespace}/${req.params.category}/${req.params.filePath}`);
-		},
-	}),
-});
-let _ready = false;
-let _deferredFiles = new Map();
+export default class AssetManager {
+	readonly log = createLogger('nodecg/lib/assets');
 
-const collections: Collection[] = [];
+	readonly assetsRoot = path.join(process.env.NODECG_ROOT, 'assets');
 
-// Create ASSETS_ROOT folder if it does not exist.
-/* istanbul ignore next: Simple directory creation. */
-if (!fs.existsSync(ASSETS_ROOT)) {
-	fs.mkdirSync(ASSETS_ROOT);
-}
+	readonly collectionsRep: Replicant;
 
-bundles.all().forEach(bundle => {
-	if (!bundle.hasAssignableSoundCues && (!bundle.assetCategories || bundle.assetCategories.length <= 0)) {
-		return;
-	}
+	readonly app: Express.Application;
 
-	// If this bundle has sounds && at least one of those sounds is assignable, create the assets:sounds replicant.
-	if (bundle.hasAssignableSoundCues) {
-		bundle.assetCategories.unshift({
-			name: 'sounds',
-			title: 'Sounds',
-			allowedTypes: ['mp3', 'ogg'],
-		});
-	}
+	private readonly _repsByNamespace = new Map<string, Map<string, Replicant>>();
 
-	collections.push({
-		name: bundle.name,
-		categories: bundle.assetCategories,
-	});
-});
+	private readonly _collections: Collection[] = [];
 
-collections.forEach(({ name, categories }) => {
-	const namespacedAssetsPath = calcNamespacedAssetsPath(name);
-	replicantsByNamespace[name] = {};
-	collectionsRep.value.push({ name, categories });
-	categories.forEach(category => {
+	constructor(replicator: Replicator) {
+		// Create assetsRoot folder if it does not exist.
 		/* istanbul ignore next: Simple directory creation. */
-		const categoryPath = path.join(namespacedAssetsPath, category.name);
-		if (!fs.existsSync(categoryPath)) {
-			fs.mkdirSync(categoryPath);
+		if (!fs.existsSync(this.assetsRoot)) {
+			fs.mkdirSync(this.assetsRoot);
 		}
 
-		replicantsByNamespace[name][category.name] = new Replicant(`assets:${category.name}`, name, {
+		this.collectionsRep = replicator.findOrDeclare('collections', '_assets', {
 			defaultValue: [],
 			persistent: false,
 		});
 
-		if (category.allowedTypes && category.allowedTypes.length > 0) {
-			category.allowedTypes.forEach(type => {
-				watchPatterns.push(`${categoryPath}/**/*.${type}`);
+		const { collections, watchPatterns } = this._computeCollections(bundlesLib.all());
+		this._setupWatcher(watchPatterns);
+		this.app = this._setupExpress();
+	}
+
+	private _computeCollections(bundles: NodeCG.Bundle[]): { collections: Collection[]; watchPatterns: Set<string> } {
+		const watchPatterns = new Set<string>();
+		const collections: Collection[] = [];
+		bundles.forEach(bundle => {
+			if (!bundle.hasAssignableSoundCues && (!bundle.assetCategories || bundle.assetCategories.length <= 0)) {
+				return;
+			}
+
+			// If this bundle has sounds && at least one of those sounds is assignable, create the assets:sounds replicant.
+			if (bundle.hasAssignableSoundCues) {
+				bundle.assetCategories.unshift({
+					name: 'sounds',
+					title: 'Sounds',
+					allowedTypes: ['mp3', 'ogg'],
+				});
+			}
+
+			collections.push({
+				name: bundle.name,
+				categories: bundle.assetCategories,
 			});
-		} else {
-			watchPatterns.push(`${categoryPath}/**/*`);
-		}
-	});
-});
-
-// Chokidar no longer accepts Windows-style path separators when using globs.
-// Therefore, we must replace them with Unix-style ones.
-// See https://github.com/paulmillr/chokidar/issues/777 for more details.
-const fixedPaths = watchPatterns.map(pattern => pattern.replace(/\\/g, '/'));
-const watcher = chokidar.watch(fixedPaths, { ignored: /[/\\]\./ });
-
-/* When the Chokidar watcher first starts up, it will fire an 'add' event for each file found.
- * After that, it will emit the 'ready' event.
- * To avoid thrashing the replicant, we want to add all of these first files at once.
- * This is what the _ready Boolean, _deferredFiles Map, and resolveDeferreds function are for.
- */
-
-watcher.on('add', filepath => {
-	if (!_ready) {
-		_deferredFiles.set(filepath, null);
-	}
-
-	sha1File(filepath, (err, sum) => {
-		if (err) {
-			if (_deferredFiles) {
-				_deferredFiles.remove(filepath);
-			}
-
-			log.error(err);
-			return;
-		}
-
-		const uploadedFile = new AssetFile(filepath, sum);
-		if (_deferredFiles) {
-			_deferredFiles.set(filepath, uploadedFile);
-			resolveDeferreds();
-		} else {
-			replicantsByNamespace[uploadedFile.namespace][uploadedFile.category].value.push(uploadedFile);
-		}
-	});
-});
-
-watcher.on('ready', () => {
-	_ready = true;
-});
-
-watcher.on('change', filepath => {
-	debounceName(filepath, () => {
-		sha1File(filepath, (err, sum) => {
-			if (err) {
-				log.error(err);
-				return;
-			}
-
-			const newUploadedFile = new AssetFile(filepath, sum);
-			const rep = replicantsByNamespace[newUploadedFile.namespace][newUploadedFile.category];
-			const index = rep.value.findIndex(uf => uf.url === newUploadedFile.url);
-
-			if (index > -1) {
-				rep.value.splice(index, 1, newUploadedFile);
-			} else {
-				rep.value.push(newUploadedFile);
-			}
 		});
-	});
-});
 
-watcher.on('unlink', filepath => {
-	const deletedFile = new AssetFile(filepath);
-	const rep = replicantsByNamespace[deletedFile.namespace][deletedFile.category];
-	rep.value.some((assetFile, index) => {
-		if (assetFile.url === deletedFile.url) {
-			rep.value.splice(index, 1);
-			log.debug('"%s" was deleted', deletedFile.url);
-			return true;
-		}
+		collections.forEach(({ name, categories }) => {
+			const namespacedAssetsPath = this._calcNamespacedAssetsPath(name);
+			const collectionReps = new Map<string, Replicant>();
+			this._repsByNamespace.set(name, collectionReps);
+			this.collectionsRep.value.push({ name, categories });
 
-		return false;
-	});
-});
-
-watcher.on('error', e => log.error(e.stack));
-
-// Retrieving existing files
-app.get(
-	'/assets/:namespace/:category/:filePath',
-
-	// Check if the user is authorized.
-	authCheck,
-
-	// Send the file (or an appropriate error).
-	(req, res) => {
-		const fullPath = path.join(ASSETS_ROOT, req.params.namespace, req.params.category, req.params.filePath);
-		res.sendFile(fullPath, err => {
-			if (err && !res.headersSent) {
-				if (err.code === 'ENOENT') {
-					return res.sendStatus(404);
+			for (const category of categories) {
+				/* istanbul ignore next: Simple directory creation. */
+				const categoryPath = path.join(namespacedAssetsPath, category.name);
+				if (!fs.existsSync(categoryPath)) {
+					fs.mkdirSync(categoryPath);
 				}
 
-				log.error(`Unexpected error sending file ${fullPath}`, err);
-				res.sendStatus(500);
-			}
-		});
-	},
-);
+				collectionReps.set(
+					category.name,
+					new Replicant(`assets:${category.name}`, name, {
+						defaultValue: [],
+						persistent: false,
+					}),
+				);
 
-const uploader = upload.array('file', 64);
-
-// Uploading new files
-app.post(
-	'/assets/:namespace/:category/:filePath',
-
-	// Check if the user is authorized.
-	authCheck,
-
-	// Then receive the files they are sending, up to a max of 64.
-	(req, res, next) => {
-		uploader(req, res, err => {
-			if (err) {
-				console.error(err);
-				res.send(500);
-				return;
-			}
-
-			next();
-		});
-	},
-
-	// Then send a response.
-	(req, res) => {
-		if (req.files) {
-			res.status(200).send('Success');
-		} else {
-			res.status(400).send('Bad Request');
-		}
-	},
-);
-
-// Deleting existing files
-app.delete(
-	'/assets/:namespace/:category/:filename',
-
-	// Check if the user is authorized.
-	authCheck,
-
-	// Delete the file (or an send appropriate error).
-	(req, res) => {
-		const { namespace, category, filename } = req.params;
-		const fullPath = path.join(ASSETS_ROOT, namespace, category, filename);
-
-		fs.unlink(fullPath, err => {
-			if (err) {
-				if (err.code === 'ENOENT') {
-					return res.status(410).send(`The file to delete does not exist: ${filename}`);
+				if (category.allowedTypes && category.allowedTypes.length > 0) {
+					category.allowedTypes.forEach(type => {
+						watchPatterns.add(`${categoryPath}/**/*.${type}`);
+					});
+				} else {
+					watchPatterns.add(`${categoryPath}/**/*`);
 				}
-
-				log.error(`Failed to delete file ${fullPath}`, err);
-				return res.status(500).send(`Failed to delete file: ${filename}`);
 			}
-
-			res.sendStatus(200);
 		});
-	},
-);
 
-module.exports = app;
-
-function calcNamespacedAssetsPath(namespace) {
-	const assetsPath = path.join(ASSETS_ROOT, namespace);
-	/* istanbul ignore next: Simple directory creation. */
-	if (!fs.existsSync(assetsPath)) {
-		fs.mkdirSync(assetsPath);
+		return { collections, watchPatterns };
 	}
 
-	return assetsPath;
-}
+	private _setupWatcher(watchPatterns: Set<string>): void {
+		// Chokidar no longer accepts Windows-style path separators when using globs.
+		// Therefore, we must replace them with Unix-style ones.
+		// See https://github.com/paulmillr/chokidar/issues/777 for more details.
+		const fixedPaths = Array.from(watchPatterns).map(pattern => pattern.replace(/\\/g, '/'));
+		const watcher = chokidar.watch(fixedPaths, { ignored: /[/\\]\./ });
 
-function resolveDeferreds() {
-	let foundNull = false;
-	_deferredFiles.forEach(uf => {
-		if (uf === null) {
-			foundNull = true;
-		}
-	});
+		/* When the Chokidar watcher first starts up, it will fire an 'add' event for each file found.
+		 * After that, it will emit the 'ready' event.
+		 * To avoid thrashing the replicant, we want to add all of these first files at once.
+		 * This is what the ready Boolean, deferredFiles Map, and resolveDeferreds function are for.
+		 */
+		let ready = false;
+		const deferredFiles = new Map<string, AssetFile | null>();
+		watcher.on('add', filepath => {
+			if (!ready) {
+				deferredFiles.set(filepath, null);
+			}
 
-	if (!foundNull) {
-		_deferredFiles.forEach(uploadedFile => {
-			replicantsByNamespace[uploadedFile.namespace][uploadedFile.category].value.push(uploadedFile);
+			sha1File(filepath, (err, sum) => {
+				if (err) {
+					if (deferredFiles) {
+						deferredFiles.delete(filepath);
+					}
+
+					this.log.error(err);
+					return;
+				}
+
+				const uploadedFile = new AssetFile(filepath, sum);
+				if (deferredFiles) {
+					deferredFiles.set(filepath, uploadedFile);
+					this._resolveDeferreds(deferredFiles);
+				} else {
+					const nspReps = this._repsByNamespace.get(uploadedFile.namespace);
+					if (nspReps) {
+						const rep = nspReps.get(uploadedFile.category);
+						rep.value.push(uploadedFile);
+					}
+				}
+			});
 		});
-		_deferredFiles = null;
+
+		watcher.on('ready', () => {
+			ready = true;
+		});
+
+		watcher.on('change', filepath => {
+			debounceName(filepath, () => {
+				sha1File(filepath, (err, sum) => {
+					if (err) {
+						this.log.error(err);
+						return;
+					}
+
+					const newUploadedFile = new AssetFile(filepath, sum);
+					const rep = replicantsByNamespace[newUploadedFile.namespace][newUploadedFile.category];
+					const index = rep.value.findIndex(uf => uf.url === newUploadedFile.url);
+
+					if (index > -1) {
+						rep.value.splice(index, 1, newUploadedFile);
+					} else {
+						rep.value.push(newUploadedFile);
+					}
+				});
+			});
+		});
+
+		watcher.on('unlink', filepath => {
+			const deletedFile = new AssetFile(filepath);
+			const rep = replicantsByNamespace[deletedFile.namespace][deletedFile.category];
+			rep.value.some((assetFile, index) => {
+				if (assetFile.url === deletedFile.url) {
+					rep.value.splice(index, 1);
+					this.log.debug('"%s" was deleted', deletedFile.url);
+					return true;
+				}
+
+				return false;
+			});
+		});
+
+		watcher.on('error', e => this.log.error(e.stack));
+	}
+
+	private _setupExpress(): Express.Application {
+		const app = express();
+		const upload = multer({
+			storage: multer.diskStorage({
+				destination: this.assetsRoot,
+				filename(req, _file, cb) {
+					const p = req.params as { [k: string]: string };
+					cb(null, `${p.namespace}/${p.category}/${p.filePath}`);
+				},
+			}),
+		});
+		const uploader = upload.array('file', 64);
+
+		// Retrieving existing files
+		app.get(
+			'/assets/:namespace/:category/:filePath',
+
+			// Check if the user is authorized.
+			authCheck,
+
+			// Send the file (or an appropriate error).
+			(req, res) => {
+				const fullPath = path.join(
+					this.assetsRoot,
+					req.params.namespace,
+					req.params.category,
+					req.params.filePath,
+				);
+				res.sendFile(fullPath, (err: NodeJS.ErrnoException) => {
+					if (err && !res.headersSent) {
+						if (err.code === 'ENOENT') {
+							return res.sendStatus(404);
+						}
+
+						this.log.error(`Unexpected error sending file ${fullPath}`, err);
+						return res.sendStatus(500);
+					}
+
+					return undefined;
+				});
+			},
+		);
+
+		// Uploading new files
+		app.post(
+			'/assets/:namespace/:category/:filePath',
+
+			// Check if the user is authorized.
+			authCheck,
+
+			// Then receive the files they are sending, up to a max of 64.
+			(req, res, next) => {
+				uploader(req, res, err => {
+					if (err) {
+						console.error(err);
+						res.send(500);
+						return;
+					}
+
+					next();
+				});
+			},
+
+			// Then send a response.
+			(req, res) => {
+				if (req.files) {
+					res.status(200).send('Success');
+				} else {
+					res.status(400).send('Bad Request');
+				}
+			},
+		);
+
+		// Deleting existing files
+		app.delete(
+			'/assets/:namespace/:category/:filename',
+
+			// Check if the user is authorized.
+			authCheck,
+
+			// Delete the file (or an send appropriate error).
+			(req, res) => {
+				const { namespace, category, filename } = req.params as { [k: string]: string };
+				const fullPath = path.join(this.assetsRoot, namespace, category, filename);
+
+				fs.unlink(fullPath, err => {
+					if (err) {
+						if (err.code === 'ENOENT') {
+							return res.status(410).send(`The file to delete does not exist: ${filename}`);
+						}
+
+						this.log.error(`Failed to delete file ${fullPath}`, err);
+						return res.status(500).send(`Failed to delete file: ${filename}`);
+					}
+
+					return res.sendStatus(200);
+				});
+			},
+		);
+
+		return app;
+	}
+
+	private _calcNamespacedAssetsPath(namespace: string): string {
+		const assetsPath = path.join(this.assetsRoot, namespace);
+		/* istanbul ignore next: Simple directory creation. */
+		if (!fs.existsSync(assetsPath)) {
+			fs.mkdirSync(assetsPath);
+		}
+
+		return assetsPath;
+	}
+
+	private _resolveDeferreds(deferredFiles: Map<string, AssetFile | null>): void {
+		let foundNull = false;
+		deferredFiles.forEach(uf => {
+			if (uf === null) {
+				foundNull = true;
+			}
+		});
+
+		if (!foundNull) {
+			deferredFiles.forEach(uploadedFile => {
+				replicantsByNamespace[uploadedFile.namespace][uploadedFile.category].value.push(uploadedFile);
+			});
+			deferredFiles.clear();
+		}
 	}
 }

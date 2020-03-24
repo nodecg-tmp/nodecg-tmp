@@ -4,15 +4,14 @@ import * as path from 'path';
 // Packages
 import * as fs from 'fs-extra';
 import clone from 'clone';
+import * as SocketIO from 'socket.io';
 
 // Ours
 import createLogger from './logger';
-import server from './server';
 import * as shared from './replicant/shared';
 
 const log = createLogger('replicator');
 const REPLICANTS_ROOT = path.join(process.env.NODECG_ROOT, 'db/replicants');
-const io = server.getIO();
 const declaredReplicants = {};
 const stores = {};
 
@@ -21,20 +20,16 @@ if (!fs.existsSync(REPLICANTS_ROOT)) {
 	fs.mkdirpSync(REPLICANTS_ROOT);
 }
 
-module.exports = {
-	declare,
-	applyOperations,
-	find,
-	findOrDeclare,
-	emitToClients,
-	saveReplicant,
-	declaredReplicants,
-	saveAllReplicants,
-	stores,
-};
+export default class Replicator {
+	private readonly _pendingSave = new WeakSet<Replicant>();
 
-server.on('started', () => {
-	io.sockets.on('connection', socket => {
+	constructor(io: SocketIO.Server) {
+		io.sockets.on('connection', socket => {
+			this.attachToSocket(socket);
+		});
+	}
+
+	attachToSocket(socket: SocketIO.Socket): void {
 		socket.on('replicant:declare', (data, cb) => {
 			log.replicants('received replicant:declare', data);
 			try {
@@ -107,153 +102,152 @@ server.on('started', () => {
 				}
 			}
 		});
-	});
-});
-
-/**
- * Declares a Replicant.
- * @param {string} name - The name of the Replicant to declare.
- * @param {string} namespace - The namespace to which this Replicant belongs.
- * @param {object} [opts] - The options for this replicant.
- * @param {*} [opts.defaultValue] - The default value to instantiate this Replicant with. The default value is only
- * applied if this Replicant has not previously been declared and if it has no persisted value.
- * @param {boolean} [opts.persistent=true] - Whether to persist the Replicant's value to disk on every change.
- * Persisted values are re-loaded on startup.
- * @param {string} [opts.schemaPath] - The filepath at which to look for a JSON Schema for this Replicant.
- * Defaults to `nodecg/bundles/${bundleName}/schemas/${replicantName}.json`.
- * @returns {object}
- */
-function declare(name, namespace, opts) {
-	// Delay requiring the Replicant class until here, otherwise cryptic errors are thrown. Not sure why!
-	const Replicant = require('./replicant');
-	return new Replicant(name, namespace, opts);
-}
-
-/**
- * Applies an array of operations to a replicant.
- * @param replicant {object} - The Replicant to perform these operation on.
- * @param operations {array} - An array of operations.
- */
-function applyOperations(replicant, operations) {
-	const oldValue = clone(replicant.value);
-	operations.forEach(operation => shared.applyOperation(replicant, operation));
-	replicant.revision++;
-	replicant.emit('change', replicant.value, oldValue, operations);
-
-	emitToClients(replicant.namespace, 'replicant:operations', {
-		name: replicant.name,
-		namespace: replicant.namespace,
-		revision: replicant.revision,
-		operations,
-	});
-
-	saveReplicant(replicant);
-}
-
-/**
- * Finds a Replicant, returns undefined if not found.
- * @param name {string} - The name of the Replicant to find.
- * @param namespace {string} - The namespace in which to search.
- * @returns {*}
- */
-function find(name, namespace) {
-	// If there are no replicants for that namespace, return undefined
-	if (!{}.hasOwnProperty.call(declaredReplicants, namespace)) {
-		return undefined;
 	}
 
-	// If that replicant doesn't exist for that namespace, return undefined
-	if (!{}.hasOwnProperty.call(declaredReplicants[namespace], name)) {
-		return undefined;
+	/**
+	 * Declares a Replicant.
+	 * @param {string} name - The name of the Replicant to declare.
+	 * @param {string} namespace - The namespace to which this Replicant belongs.
+	 * @param {object} [opts] - The options for this replicant.
+	 * @param {*} [opts.defaultValue] - The default value to instantiate this Replicant with. The default value is only
+	 * applied if this Replicant has not previously been declared and if it has no persisted value.
+	 * @param {boolean} [opts.persistent=true] - Whether to persist the Replicant's value to disk on every change.
+	 * Persisted values are re-loaded on startup.
+	 * @param {string} [opts.schemaPath] - The filepath at which to look for a JSON Schema for this Replicant.
+	 * Defaults to `nodecg/bundles/${bundleName}/schemas/${replicantName}.json`.
+	 * @returns {object}
+	 */
+	declare(name, namespace, opts) {
+		// Delay requiring the Replicant class until here, otherwise cryptic errors are thrown. Not sure why!
+		const Replicant = require('./replicant');
+		return new Replicant(name, namespace, opts);
 	}
 
-	// Return the replicant.
-	return declaredReplicants[namespace][name];
-}
+	/**
+	 * Applies an array of operations to a replicant.
+	 * @param replicant {object} - The Replicant to perform these operation on.
+	 * @param operations {array} - An array of operations.
+	 */
+	applyOperations(replicant, operations) {
+		const oldValue = clone(replicant.value);
+		operations.forEach(operation => shared.applyOperation(replicant, operation));
+		replicant.revision++;
+		replicant.emit('change', replicant.value, oldValue, operations);
 
-/**
- * Finds or declares a Replicant. If a Replicant with the given `name` is already present in `namespace`,
- * returns that existing Replicant. Else, declares a new Replicant.
- * @param name {string} - The name of the Replicant.
- * @param namespace {string} - The namespace that the Replicant belongs to.
- * @param {object} [opts] - The options for this replicant.
- * @param {*} [opts.defaultValue] - The default value to instantiate this Replicant with. The default value is only
- * applied if this Replicant has not previously been declared and if it has no persisted value.
- * @param {boolean} [opts.persistent=true] - Whether to persist the Replicant's value to disk on every change.
- * Persisted values are re-loaded on startup.
- * @param {string} [opts.schemaPath] - The filepath at which to look for a JSON Schema for this Replicant.
- * Defaults to `nodecg/bundles/${bundleName}/schemas/${replicantName}.json`.
- */
-function findOrDeclare(name, namespace, opts) {
-	const existingReplicant = find(name, namespace);
-	if (typeof existingReplicant !== 'undefined') {
-		return existingReplicant;
+		emitToClients(replicant.namespace, 'replicant:operations', {
+			name: replicant.name,
+			namespace: replicant.namespace,
+			revision: replicant.revision,
+			operations,
+		});
+
+		saveReplicant(replicant);
 	}
 
-	return declare(name, namespace, opts);
-}
+	/**
+	 * Finds a Replicant, returns undefined if not found.
+	 * @param name {string} - The name of the Replicant to find.
+	 * @param namespace {string} - The namespace in which to search.
+	 * @returns {*}
+	 */
+	find(name: string, namespace: string): Replicant | undefined {
+		// If there are no replicants for that namespace, return undefined
+		if (!{}.hasOwnProperty.call(declaredReplicants, namespace)) {
+			return undefined;
+		}
 
-/**
- * Emits an event to all remote Socket.IO listeners.
- * @param namespace {string} - The namespace in which to emit this event. Only applies to Socket.IO listeners.
- * @param eventName {string} - The name of the event to emit.
- * @param data {*} - The data to emit with the event.
- */
-function emitToClients(namespace, eventName, data) {
-	// Emit to clients (in the given namespace's room) using Socket.IO
-	log.replicants('emitting %s to %s:', eventName, namespace, data);
-	io.to(`replicant:${namespace}`).emit(eventName, data);
-}
+		// If that replicant doesn't exist for that namespace, return undefined
+		if (!{}.hasOwnProperty.call(declaredReplicants[namespace], name)) {
+			return undefined;
+		}
 
-const _pendingSave = new Set();
-/**
- * Persists a Replicant to disk. Does nothing if that Replicant has `persistent: false`.
- * Delays saving until the end of the current task, and de-dupes save commands run multiple times
- * during the same task.
- * @param replicant {object} - The Replicant to save.
- */
-function saveReplicant(replicant) {
-	if (!replicant.opts.persistent) {
-		return;
+		// Return the replicant.
+		return declaredReplicants[namespace][name];
 	}
 
-	if (_pendingSave.has(replicant)) {
-		return;
+	/**
+	 * Finds or declares a Replicant. If a Replicant with the given `name` is already present in `namespace`,
+	 * returns that existing Replicant. Else, declares a new Replicant.
+	 * @param name {string} - The name of the Replicant.
+	 * @param namespace {string} - The namespace that the Replicant belongs to.
+	 * @param {object} [opts] - The options for this replicant.
+	 * @param {*} [opts.defaultValue] - The default value to instantiate this Replicant with. The default value is only
+	 * applied if this Replicant has not previously been declared and if it has no persisted value.
+	 * @param {boolean} [opts.persistent=true] - Whether to persist the Replicant's value to disk on every change.
+	 * Persisted values are re-loaded on startup.
+	 * @param {string} [opts.schemaPath] - The filepath at which to look for a JSON Schema for this Replicant.
+	 * Defaults to `nodecg/bundles/${bundleName}/schemas/${replicantName}.json`.
+	 */
+	findOrDeclare<T>(name: string, namespace: string, opts: shared.Options<T>): Replicant<T> {
+		const existingReplicant = this.find(name, namespace);
+		if (typeof existingReplicant !== 'undefined') {
+			return existingReplicant;
+		}
+
+		return this.declare(name, namespace, opts);
 	}
 
-	_pendingSave.add(replicant);
-	replicant.log.replicants('Will persist value at end of current tick.');
+	/**
+	 * Emits an event to all remote Socket.IO listeners.
+	 * @param namespace {string} - The namespace in which to emit this event. Only applies to Socket.IO listeners.
+	 * @param eventName {string} - The name of the event to emit.
+	 * @param data {*} - The data to emit with the event.
+	 */
+	emitToClients(namespace, eventName, data) {
+		// Emit to clients (in the given namespace's room) using Socket.IO
+		log.replicants('emitting %s to %s:', eventName, namespace, data);
+		io.to(`replicant:${namespace}`).emit(eventName, data);
+	}
 
-	process.nextTick(() => {
-		_pendingSave.delete(replicant);
-
+	/**
+	 * Persists a Replicant to disk. Does nothing if that Replicant has `persistent: false`.
+	 * Delays saving until the end of the current task, and de-dupes save commands run multiple times
+	 * during the same task.
+	 * @param replicant {object} - The Replicant to save.
+	 */
+	saveReplicant(replicant: Replicant): void {
 		if (!replicant.opts.persistent) {
 			return;
 		}
 
-		let value = JSON.stringify(replicant.value);
-
-		if (typeof value === 'undefined') {
-			value = '';
+		if (_pendingSave.has(replicant)) {
+			return;
 		}
 
-		try {
-			stores[replicant.namespace].setItem(`${replicant.name}.rep`, value);
-			replicant.log.replicants('Value successfully persisted.');
-		} catch (error) {
-			if (error.name !== 'QUOTA_EXCEEDED_ERR') {
-				return replicant._requestSaveReplicant();
+		_pendingSave.add(replicant);
+		replicant.log.replicants('Will persist value at end of current tick.');
+
+		process.nextTick(() => {
+			_pendingSave.delete(replicant);
+
+			if (!replicant.opts.persistent) {
+				return;
 			}
 
-			replicant.log.error('Failed to persist value:', error);
-		}
-	});
-}
+			let value = JSON.stringify(replicant.value);
 
-function saveAllReplicants() {
-	for (const replicants of Object.values(declaredReplicants)) {
-		for (const replicant of Object.values(replicants)) {
-			saveReplicant(replicant);
+			if (typeof value === 'undefined') {
+				value = '';
+			}
+
+			try {
+				stores[replicant.namespace].setItem(`${replicant.name}.rep`, value);
+				replicant.log.replicants('Value successfully persisted.');
+			} catch (error) {
+				if (error.name !== 'QUOTA_EXCEEDED_ERR') {
+					return replicant._requestSaveReplicant();
+				}
+
+				replicant.log.error('Failed to persist value:', error);
+			}
+		});
+	}
+
+	saveAllReplicants(): void {
+		for (const replicants of Object.values(declaredReplicants)) {
+			for (const replicant of Object.values(replicants)) {
+				saveReplicant(replicant);
+			}
 		}
 	}
 }

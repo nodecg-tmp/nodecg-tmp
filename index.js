@@ -1,1 +1,1 @@
-require('./build/server/index');
+require('./build/server/bootstrap');

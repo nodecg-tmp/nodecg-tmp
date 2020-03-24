@@ -12,7 +12,6 @@ import schemaDefaults from 'json-schema-defaults';
 import sha1 from 'sha1';
 
 // Ours
-import replicator from '../replicator';
 import {
 	Operation,
 	proxyRecursive,
