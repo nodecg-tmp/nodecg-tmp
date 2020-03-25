@@ -28,16 +28,6 @@ type LoggerOptions = {
 	replicants: boolean;
 };
 
-export interface LoggerInterface {
-	name: string;
-	trace: (...args: any[]) => void;
-	debug: (...args: any[]) => void;
-	info: (...args: any[]) => void;
-	warn: (...args: any[]) => void;
-	error: (...args: any[]) => void;
-	replicants: (...args: any[]) => void;
-}
-
 /**
  * A factory that configures and returns a Logger constructor.
  *

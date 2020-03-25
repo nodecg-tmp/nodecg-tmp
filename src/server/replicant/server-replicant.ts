@@ -10,6 +10,8 @@ import clone from 'clone';
 import { LocalStorage } from 'node-localstorage';
 import schemaDefaults from 'json-schema-defaults';
 import sha1 from 'sha1';
+import validator from 'is-my-json-valid';
+import TypedEmitter from 'typed-emitter';
 
 // Ours
 import {
@@ -19,43 +21,32 @@ import {
 	generateValidator,
 	DEFAULT_PERSISTENCE_INTERVAL,
 	Validator,
-} from './shared';
+	ignoreProxy,
+	resumeProxy,
+	AbstractReplicant,
+} from '../../shared/replicants.shared';
 import replaceRefs from './schema-hacks';
-import { LoggerInterface } from '../logger';
+import createLogger, { LoggerInterface } from '../logger';
 
 const REPLICANTS_ROOT = path.join(process.env.NODECG_ROOT, 'db/replicants');
 
-export default class Replicant<T> extends EventEmitter {
-	name: string;
+interface MessageEvents {
+	_operationQueued: () => void;
+}
 
-	namespace: string;
-
-	opts: Options<T>;
-
-	revision: number;
-
-	log: LoggerInterface;
-
-	schema?: { [k: string]: any };
-
-	schemaSum?: string;
-
-	private __value: T | undefined;
-
-	private _oldValue: T | undefined;
-
-	private _ignoreProxy: boolean;
-
-	private _operationQueue: Array<Operation<T>>;
-
-	private _pendingOperationFlush: boolean;
-
+/**
+ * Never instantiate this directly.
+ *
+ * Always use Replicator.declare instead.
+ * The Replicator needs to have complete control over the ServerReplicant class.
+ */
+export default class ServerReplicant<T> extends AbstractReplicant<T> {
 	get value(): T | undefined {
-		return this.__value;
+		return this._value;
 	}
 
 	set value(newValue: T | undefined) {
-		if (newValue === this.__value) {
+		if (newValue === this._value) {
 			this.log.replicants('value unchanged, no action will be taken');
 			return;
 		}
@@ -63,9 +54,9 @@ export default class Replicant<T> extends EventEmitter {
 		this.validate(newValue);
 		this.log.replicants('running setter with', newValue);
 		const clonedNewVal = clone(newValue);
-		this._ignoreProxy = true;
-		this.__value = proxyRecursive(this, newValue, '/');
-		this._ignoreProxy = false;
+		ignoreProxy(this);
+		this._value = proxyRecursive(this, newValue, '/');
+		resumeProxy(this);
 		this._addOperation({
 			path: '/',
 			method: 'overwrite',
@@ -75,48 +66,10 @@ export default class Replicant<T> extends EventEmitter {
 		});
 	}
 
-	// eslint-disable-next-line complexity
 	constructor(name: string, namespace: string, opts: Options<T> = {}) {
-		super();
+		super(name, namespace, opts);
 
-		if (!name || typeof name !== 'string') {
-			throw new Error('Must supply a name when instantiating a Replicant');
-		}
-
-		if (!namespace || typeof namespace !== 'string') {
-			throw new Error('Must supply a namespace when instantiating a Replicant');
-		}
-
-		// If replicant already exists, return that.
-		if ({}.hasOwnProperty.call(replicator.declaredReplicants, namespace)) {
-			if ({}.hasOwnProperty.call(replicator.declaredReplicants[namespace], name)) {
-				const existing = replicator.declaredReplicants[namespace][name];
-				existing.log.replicants('Existing replicant found, returning that instead of creating a new one.');
-				return existing; // eslint-disable-line no-constructor-return
-			}
-		} else {
-			replicator.declaredReplicants[namespace] = {};
-		}
-
-		// Load logger
-		this.log = require('../logger')(`Replicant/${namespace}.${name}`);
-
-		if (typeof opts.persistent === 'undefined') {
-			opts.persistent = true;
-		}
-
-		if (typeof opts.persistenceInterval === 'undefined') {
-			opts.persistenceInterval = DEFAULT_PERSISTENCE_INTERVAL;
-		}
-
-		this.name = name;
-		this.namespace = namespace;
-		this.opts = opts;
-		this.revision = 0;
-
-		replicator.declaredReplicants[namespace][name] = this;
-
-		this._operationQueue = [];
+		this.log = createLogger(`Replicant/${namespace}.${name}`);
 
 		// If present, parse the schema and generate the validator function.
 		if (opts.schemaPath) {
@@ -125,9 +78,14 @@ export default class Replicant<T> extends EventEmitter {
 				: path.join(process.env.NODECG_ROOT, opts.schemaPath);
 			if (fs.existsSync(absoluteSchemaPath)) {
 				try {
-					const schema = $RefParser.readSync(absoluteSchemaPath);
-					this.schema = replaceRefs(schema.root, schema.rootFile, schema.files);
-					this.schemaSum = sha1(this.schema);
+					const rawSchema = $RefParser.readSync(absoluteSchemaPath);
+					const parsedSchema = replaceRefs(rawSchema.root, rawSchema.rootFile, rawSchema.files);
+					if (!parsedSchema) {
+						throw new Error('parsed schema was unexpectedly undefined');
+					}
+
+					this.schema = parsedSchema;
+					this.schemaSum = sha1(JSON.stringify(parsedSchema));
 					this.validate = generateValidator(this);
 				} catch (e) {
 					/* istanbul ignore next */
@@ -183,40 +141,8 @@ export default class Replicant<T> extends EventEmitter {
 			replicator.saveReplicant(this);
 		}
 
-		// Prevents one-time change listeners from potentially being called twice.
-		// https://github.com/nodecg/nodecg/issues/296
-		const originalOnce = this.once.bind(this);
-		this.once = (event, listener) => {
-			if (event === 'change' && replicator.declaredReplicants[namespace][name]) {
-				return listener(this.value);
-			}
-
-			return originalOnce(event, listener);
-		};
-
-		/* When a new "change" listener is added, chances are that the developer wants it to be initialized ASAP.
-		 * However, if this replicant has already been declared previously in this context, their "change"
-		 * handler will *not* get run until another change comes in, which may never happen for Replicants
-		 * that change very infrequently.
-		 * To resolve this, we immediately invoke all new "change" handlers if appropriate.
-		 */
-		this.on('newListener', (event, listener) => {
-			if (event === 'change' && replicator.declaredReplicants[namespace][name]) {
-				listener(this.value);
-			}
-		});
-
 		this._requestSaveReplicant = throttle(() => replicator.saveReplicant(this), this.opts.persistenceInterval);
 	}
-
-	/**
-	 * Used to validate the new value of a replicant.
-	 *
-	 * This is a stub that will be replaced if a Schema is available.
-	 */
-	validate: Validator = (_: any, __: any): boolean => {
-		return true;
-	};
 
 	/**
 	 * Adds an operation to the operation queue, to be flushed at the end of the current tick.

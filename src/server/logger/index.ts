@@ -3,9 +3,8 @@ import * as Sentry from '@sentry/node';
 
 // Ours
 import configHelper from '../config';
-import loggerFactory, { LoggerInterface } from './logger.server';
-
-export { LoggerInterface } from './logger.server';
+import loggerFactory from './logger.server';
+import { LoggerInterface } from '../../shared/logger-interface';
 
 let Logger: new (name: string) => LoggerInterface;
 if (configHelper.config.sentry.enabled) {

@@ -4,29 +4,142 @@
 import validator from 'is-my-json-valid';
 import clone from 'clone';
 import objectPath from 'object-path';
+import { EventEmitter } from 'events';
 
-type Metadata = {
-	replicant: Replicant;
+// Ours
+import { LoggerInterface } from './logger-interface';
+
+export abstract class AbstractReplicant<T> extends EventEmitter {
+	name: string;
+
+	namespace: string;
+
+	opts: Options<T>;
+
+	revision: number;
+
+	log: LoggerInterface;
+
+	schema?: { [k: string]: any };
+
+	schemaSum?: string;
+
+	status: 'undeclared' | 'declared' | 'declaring';
+
+	validationErrors: validator.ValidationError[] = [];
+
+	protected _value: T | undefined;
+
+	protected _oldValue: T | undefined;
+
+	protected _operationQueue: Array<Operation<T>>;
+
+	protected _pendingOperationFlush: boolean;
+
+	abstract get value(): T | undefined;
+	abstract set value(newValue: T | undefined);
+
+	constructor(name: string, namespace: string, opts: Options<T> = {}) {
+		super();
+
+		if (!name || typeof name !== 'string') {
+			throw new Error('Must supply a name when instantiating a Replicant');
+		}
+
+		if (!namespace || typeof namespace !== 'string') {
+			throw new Error('Must supply a namespace when instantiating a Replicant');
+		}
+
+		if (typeof opts.persistent === 'undefined') {
+			opts.persistent = true;
+		}
+
+		if (typeof opts.persistenceInterval === 'undefined') {
+			opts.persistenceInterval = DEFAULT_PERSISTENCE_INTERVAL;
+		}
+
+		this.name = name;
+		this.namespace = namespace;
+		this.opts = opts;
+		this.revision = 0;
+
+		this._operationQueue = [];
+
+		// Prevents one-time change listeners from potentially being called twice.
+		// https://github.com/nodecg/nodecg/issues/296
+		const originalOnce = this.once.bind(this);
+		this.once = (event, listener) => {
+			if (event === 'change' && this.status === 'declared') {
+				return listener(this.value);
+			}
+
+			return originalOnce(event, listener);
+		};
+
+		/**
+		 * When a new "change" listener is added, chances are that the developer wants it to be initialized ASAP.
+		 * However, if this replicant has already been declared previously in this context, their "change"
+		 * handler will *not* get run until another change comes in, which may never happen for Replicants
+		 * that change very infrequently.
+		 * To resolve this, we immediately invoke all new "change" handlers if appropriate.
+		 */
+		this.on('newListener', (event, listener) => {
+			if (event === 'change' && this.status === 'declared') {
+				listener(this.value);
+			}
+		});
+	}
+
+	/**
+	 * Used to validate the new value of a replicant.
+	 *
+	 * This is a stub that will be replaced if a Schema is available.
+	 */
+	validate: Validator = (): boolean => {
+		return true;
+	};
+}
+
+type Metadata<T> = {
+	replicant: AbstractReplicant<T>;
 	path: string;
 	proxy: unknown;
 };
 
 export type Operation<T> = {
 	path: string;
-} & (
+} & ( // Objects and arrays
 	| { method: 'overwrite'; args: { newValue: T | undefined } }
 	| { method: 'delete'; args: { prop: keyof T } }
 	| { method: 'add'; args: { prop: string; newValue: any } }
 	| { method: 'update'; args: { prop: string; newValue: any } }
+
+	// Array mutator methods
+	// This whole thing is gross and needs to be removed in v3
+	// It is rife with unsupported cases, very easy to make bugs here
+	| { method: 'copyWithin'; args: { prop: string; mutatorArgs: Parameters<any[]['copyWithin']> } }
+	| { method: 'fill'; args: { prop: string; mutatorArgs: Parameters<any[]['fill']> } }
+	| { method: 'pop'; args: { prop: string } }
+	| { method: 'push'; args: { prop: string; mutatorArgs: Parameters<any[]['push']> } }
+	| { method: 'reverse'; args: { prop: string } }
+	| { method: 'shift'; args: { prop: string } }
+	| { method: 'sort'; args: { prop: string; mutatorArgs: Parameters<any[]['sort']> } }
+	| { method: 'splice'; args: { prop: string; mutatorArgs: Parameters<any[]['splice']> } }
+	| { method: 'unshift'; args: { prop: string; mutatorArgs: Parameters<any[]['unshift']> } }
 );
 
 export type Options<T> = { persistent?: boolean; persistenceInterval?: number; schemaPath?: string; defaultValue?: T };
 
-export type Validator = (newValue: any, opts: { throwOnInvalid?: boolean }) => boolean;
+export type ValidatorOptions = {
+	throwOnInvalid?: boolean;
+};
+
+export type Validator = (newValue: any, opts?: ValidatorOptions) => boolean;
 
 const proxyMetadataMap = new WeakMap();
-const metadataMap = new WeakMap<any, Metadata>();
+const metadataMap = new WeakMap<any, Metadata<any>>();
 const proxySet = new WeakSet();
+const ignoringProxy = new WeakSet<AbstractReplicant<any>>();
 
 export const ARRAY_MUTATOR_METHODS = [
 	'copyWithin',
@@ -46,6 +159,18 @@ export const ARRAY_MUTATOR_METHODS = [
  */
 export const DEFAULT_PERSISTENCE_INTERVAL = 100;
 
+export function ignoreProxy(replicant: AbstractReplicant<any>): void {
+	ignoringProxy.add(replicant);
+}
+
+export function resumeProxy(replicant: AbstractReplicant<any>): void {
+	ignoringProxy.delete(replicant);
+}
+
+export function isIgnoringProxy(replicant: AbstractReplicant<any>): boolean {
+	return ignoringProxy.has(replicant);
+}
+
 const deleteTrap = function<T>(target: T, prop: keyof T): boolean | void {
 	const metadata = metadataMap.get(target);
 	if (!metadata) {
@@ -54,7 +179,7 @@ const deleteTrap = function<T>(target: T, prop: keyof T): boolean | void {
 
 	const { replicant } = metadata;
 
-	if (replicant._ignoreProxy) {
+	if (isIgnoringProxy(replicant)) {
 		return delete target[prop];
 	}
 
@@ -84,7 +209,7 @@ const CHILD_ARRAY_HANDLER = {
 		}
 
 		const { replicant } = metadata;
-		if (metadata.replicant._ignoreProxy) {
+		if (isIgnoringProxy(replicant)) {
 			return target[prop];
 		}
 
@@ -105,10 +230,10 @@ const CHILD_ARRAY_HANDLER = {
 				if (process.browser) {
 					metadata.replicant._addOperation(metadata.path, prop, Array.prototype.slice.call(args));
 				} else {
-					replicant._ignoreProxy = true;
+					ignoreProxy(replicant);
 					metadata.replicant._addOperation(metadata.path, prop, Array.prototype.slice.call(args));
 					const retValue = target[prop].apply(target, args);
-					replicant._ignoreProxy = false;
+					resumeProxy(replicant);
 
 					// We have to re-proxy the target because the items could have been inserted.
 					proxyRecursive(replicant, target, metadata.path);
@@ -134,7 +259,7 @@ const CHILD_ARRAY_HANDLER = {
 
 		const { replicant } = metadata;
 
-		if (replicant._ignoreProxy) {
+		if (isIgnoringProxy(replicant)) {
 			target[prop] = newValue;
 			return true;
 		}
@@ -198,7 +323,7 @@ const CHILD_OBJECT_HANDLER = {
 
 		const { replicant } = metadata;
 
-		if (replicant._ignoreProxy) {
+		if (isIgnoringProxy(replicant)) {
 			target[prop] = newValue;
 			return true;
 		}
@@ -240,13 +365,27 @@ const CHILD_OBJECT_HANDLER = {
  * @param replicant - The Replicant to perform the operation on.
  * @param operation - The operation to perform.
  */
-export function applyOperation<T>(replicant: Replicant<T>, operation: Operation<T>): boolean {
-	replicant._ignoreProxy = true;
+export function applyOperation<T>(replicant: AbstractReplicant<T>, operation: Operation<T>): boolean {
+	ignoreProxy(replicant);
 
 	let result;
 	const path = pathStrToPathArr(operation.path);
 	if (ARRAY_MUTATOR_METHODS.includes(operation.method)) {
-		const arr = objectPath.get(replicant.value, path);
+		if (typeof replicant.value !== 'object' || replicant.value === null) {
+			throw new Error(
+				`expected replicant "${replicant.namespace}:${
+					replicant.name
+				}" to have a value with type "object", got "${typeof replicant.value}" instead`,
+			);
+		}
+
+		const arr: unknown = objectPath.get((replicant.value as unknown) as object, path);
+		if (!Array.isArray(arr)) {
+			throw new Error(
+				`expected to find an array in replicant "${replicant.namespace}:${replicant.name}" at path "${operation.path}"`,
+			);
+		}
+
 		result = arr[operation.method].apply(arr, operation.args);
 
 		// Recursively check for any objects that may have been added by the above method
@@ -289,7 +428,7 @@ export function applyOperation<T>(replicant: Replicant<T>, operation: Operation<
 		}
 	}
 
-	replicant._ignoreProxy = false;
+	resumeProxy(replicant);
 	return result;
 }
 
@@ -298,7 +437,11 @@ export function applyOperation<T>(replicant: Replicant<T>, operation: Operation<
  * @param replicant {object} - The Replicant to perform the operation on.
  * @returns {function} - The generated validator function.
  */
-export function generateValidator(replicant: Replicant): Validator {
+export function generateValidator<T>(replicant: AbstractReplicant<T>): Validator {
+	if (!replicant.schema) {
+		throw new Error("can't generate a validator for a replicant which lacks a schema");
+	}
+
 	const validate = validator(replicant.schema, {
 		greedy: true,
 		verbose: true,
@@ -311,14 +454,18 @@ export function generateValidator(replicant: Replicant): Validator {
 	 * @param [opts] {Object}
 	 * @param [opts.throwOnInvalid = true] {Boolean} - Whether or not to immediately throw when the provided value fails validation against the schema.
 	 */
-	return function(this: Replicant, value = replicant.value, { throwOnInvalid = true } = {}) {
+	return function(
+		this: AbstractReplicant<T>,
+		value: any = replicant.value,
+		{ throwOnInvalid = true }: ValidatorOptions = {},
+	) {
 		const result = validate(value);
 		if (!result) {
 			this.validationErrors = validate.errors;
 
 			if (throwOnInvalid) {
 				let errorMessage = `Invalid value rejected for replicant "${replicant.name}" in namespace "${replicant.namespace}":\n`;
-				validate.errors.forEach(error => {
+				this.validationErrors.forEach(error => {
 					const field = error.field.replace(/^data\./, '');
 					if (error.message === 'is the wrong type') {
 						errorMessage += `\tField "${field}" ${error.message}. Value "${String(
@@ -346,7 +493,7 @@ export function generateValidator(replicant: Replicant): Validator {
  * @returns {*} - The recursively Proxied value (or just `value` unchanged, if `value` is a primitive)
  * @private
  */
-export function proxyRecursive<T>(replicant, value: T, path): T {
+export function proxyRecursive<T>(replicant: AbstractReplicant<T>, value: T, path: string): T {
 	if (typeof value === 'object' && value !== null) {
 		let p;
 
@@ -395,7 +542,7 @@ export function proxyRecursive<T>(replicant, value: T, path): T {
 	return value;
 }
 
-function joinPathParts(part1, part2) {
+function joinPathParts(part1: string, part2: string): string {
 	return part1.endsWith('/') ? `${part1}${part2}` : `${part1}/${part2}`;
 }
 
@@ -404,8 +551,8 @@ function joinPathParts(part1, part2) {
  * @param path {String} - The path to convert.
  * @returns {Array} - The converted path.
  */
-function pathStrToPathArr(path) {
-	path = path
+function pathStrToPathArr(path: string): string[] {
+	const pathArr = path
 		.substr(1)
 		.split('/')
 		.map(part => {
@@ -415,11 +562,11 @@ function pathStrToPathArr(path) {
 
 	// For some reason, path arrays whose only item is an empty string cause errors.
 	// In this case, we replace the path with an empty array, which seems to be fine.
-	if (path.length === 1 && path[0] === '') {
-		path = [];
+	if (pathArr.length === 1 && pathArr[0] === '') {
+		return [];
 	}
 
-	return path;
+	return pathArr;
 }
 
 /**
@@ -427,7 +574,7 @@ function pathStrToPathArr(path) {
  * @param path {Array} - The path to convert.
  * @returns {String} - The converted path.
  */
-function pathArrToPathStr(path) {
+function pathArrToPathStr(path: string[]): string {
 	const strPath = path.join('/');
 	if (strPath.charAt(0) !== '/') {
 		return `/${strPath}`;
@@ -441,7 +588,7 @@ function pathArrToPathStr(path) {
  * @param replicant {object} - The Replicant that this value should belong to.
  * @param value {*} - The value to check ownership of.
  */
-function assertSingleOwner(replicant, value) {
+function assertSingleOwner(replicant: AbstractReplicant<any>, value: any) {
 	let metadata;
 	if (proxySet.has(value)) {
 		metadata = proxyMetadataMap.get(value);

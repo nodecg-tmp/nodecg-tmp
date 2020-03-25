@@ -5,7 +5,7 @@
 const EventEmitter = require('events');
 const equal = require('deep-equal');
 const clone = require('clone');
-const shared = require('../../server/replicant/shared');
+const shared = require('../../shared/replicants.shared');
 const declaredReplicants = {};
 
 const REPLICANT_HANDLER = {
@@ -21,7 +21,7 @@ const REPLICANT_HANDLER = {
 	},
 
 	set(target, prop, newValue) {
-		if (prop !== 'value' || target._ignoreProxy) {
+		if (prop !== 'value' || isIgnoringProxy(target)) {
 			target[prop] = newValue;
 			return true;
 		}

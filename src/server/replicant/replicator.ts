@@ -7,23 +7,31 @@ import clone from 'clone';
 import * as SocketIO from 'socket.io';
 
 // Ours
-import createLogger from './logger';
-import * as shared from './replicant/shared';
+import createLogger from '../logger';
+import * as shared from '../../shared/replicants.shared';
+import Replicant from './server-replicant';
+import { noop } from '../util';
 
 const log = createLogger('replicator');
-const REPLICANTS_ROOT = path.join(process.env.NODECG_ROOT, 'db/replicants');
-const declaredReplicants = {};
-const stores = {};
-
-// Make 'db/replicants' folder if it doesn't exist
-if (!fs.existsSync(REPLICANTS_ROOT)) {
-	fs.mkdirpSync(REPLICANTS_ROOT);
-}
 
 export default class Replicator {
-	private readonly _pendingSave = new WeakSet<Replicant>();
+	readonly replicantsRoot = path.join(process.env.NODECG_ROOT, 'db/replicants');
+
+	readonly io: SocketIO.Server;
+
+	readonly declaredReplicants = new Map<string, Map<string, Replicant<any>>>();
+
+	private readonly _stores = new Map<string, Map<string, Replicant<any>>>();
+
+	private readonly _pendingSave = new WeakSet<Replicant<any>>();
 
 	constructor(io: SocketIO.Server) {
+		// Make 'db/replicants' folder if it doesn't exist
+		if (!fs.existsSync(this.replicantsRoot)) {
+			fs.mkdirpSync(this.replicantsRoot);
+		}
+
+		this.io = io;
 		io.sockets.on('connection', socket => {
 			this.attachToSocket(socket);
 		});
@@ -33,7 +41,7 @@ export default class Replicator {
 		socket.on('replicant:declare', (data, cb) => {
 			log.replicants('received replicant:declare', data);
 			try {
-				const replicant = findOrDeclare(data.name, data.namespace, data.opts);
+				const replicant = this.declare(data.name, data.namespace, data.opts);
 				if (typeof cb === 'function') {
 					cb({
 						value: replicant.value,
@@ -55,9 +63,9 @@ export default class Replicator {
 			}
 		});
 
-		socket.on('replicant:proposeOperations', (data, cb = function() {}) => {
+		socket.on('replicant:proposeOperations', (data, cb = noop) => {
 			log.replicants('received replicant:proposeOperations', data);
-			const serverReplicant = findOrDeclare(data.name, data.namespace, data.opts);
+			const serverReplicant = this.declare(data.name, data.namespace, data.opts);
 			if (serverReplicant.schema && data.schemaSum !== serverReplicant.schemaSum) {
 				log.replicants(
 					'Change request %s:%s had mismatched schema sum (ours %s, theirs %s), invoking callback with new schema and fullupdate',
@@ -88,12 +96,12 @@ export default class Replicator {
 				});
 			}
 
-			applyOperations(serverReplicant, data.operations);
+			this.applyOperations(serverReplicant, data.operations);
 		});
 
 		socket.on('replicant:read', (data, cb) => {
 			log.replicants('replicant:read', data);
-			const replicant = find(data.name, data.namespace);
+			const replicant = this.declare(data.name, data.namespace);
 			if (typeof cb === 'function') {
 				if (replicant) {
 					cb(replicant.value);
@@ -117,10 +125,22 @@ export default class Replicator {
 	 * Defaults to `nodecg/bundles/${bundleName}/schemas/${replicantName}.json`.
 	 * @returns {object}
 	 */
-	declare(name, namespace, opts) {
-		// Delay requiring the Replicant class until here, otherwise cryptic errors are thrown. Not sure why!
-		const Replicant = require('./replicant');
-		return new Replicant(name, namespace, opts);
+	declare<T>(name: string, namespace: string, opts?: shared.Options<T>): Replicant<T> {
+		// If replicant already exists, return that.
+		const nsp = this.declaredReplicants.get(namespace);
+		if (nsp) {
+			const existing = nsp.get(name);
+			if (existing) {
+				existing.log.replicants('Existing replicant found, returning that instead of creating a new one.');
+				return existing;
+			}
+		} else {
+			this.declaredReplicants.set(namespace, new Map());
+		}
+
+		const rep = new Replicant(name, namespace, opts);
+		this.declaredReplicants.get(namespace)!.set(name, rep);
+		return rep;
 	}
 
 	/**
@@ -128,75 +148,32 @@ export default class Replicator {
 	 * @param replicant {object} - The Replicant to perform these operation on.
 	 * @param operations {array} - An array of operations.
 	 */
-	applyOperations(replicant, operations) {
+	applyOperations<T>(replicant: Replicant<T>, operations: Array<shared.Operation<T>>): void {
 		const oldValue = clone(replicant.value);
 		operations.forEach(operation => shared.applyOperation(replicant, operation));
 		replicant.revision++;
 		replicant.emit('change', replicant.value, oldValue, operations);
 
-		emitToClients(replicant.namespace, 'replicant:operations', {
+		this.emitToClients(replicant.namespace, 'replicant:operations', {
 			name: replicant.name,
 			namespace: replicant.namespace,
 			revision: replicant.revision,
 			operations,
 		});
 
-		saveReplicant(replicant);
-	}
-
-	/**
-	 * Finds a Replicant, returns undefined if not found.
-	 * @param name {string} - The name of the Replicant to find.
-	 * @param namespace {string} - The namespace in which to search.
-	 * @returns {*}
-	 */
-	find(name: string, namespace: string): Replicant | undefined {
-		// If there are no replicants for that namespace, return undefined
-		if (!{}.hasOwnProperty.call(declaredReplicants, namespace)) {
-			return undefined;
-		}
-
-		// If that replicant doesn't exist for that namespace, return undefined
-		if (!{}.hasOwnProperty.call(declaredReplicants[namespace], name)) {
-			return undefined;
-		}
-
-		// Return the replicant.
-		return declaredReplicants[namespace][name];
-	}
-
-	/**
-	 * Finds or declares a Replicant. If a Replicant with the given `name` is already present in `namespace`,
-	 * returns that existing Replicant. Else, declares a new Replicant.
-	 * @param name {string} - The name of the Replicant.
-	 * @param namespace {string} - The namespace that the Replicant belongs to.
-	 * @param {object} [opts] - The options for this replicant.
-	 * @param {*} [opts.defaultValue] - The default value to instantiate this Replicant with. The default value is only
-	 * applied if this Replicant has not previously been declared and if it has no persisted value.
-	 * @param {boolean} [opts.persistent=true] - Whether to persist the Replicant's value to disk on every change.
-	 * Persisted values are re-loaded on startup.
-	 * @param {string} [opts.schemaPath] - The filepath at which to look for a JSON Schema for this Replicant.
-	 * Defaults to `nodecg/bundles/${bundleName}/schemas/${replicantName}.json`.
-	 */
-	findOrDeclare<T>(name: string, namespace: string, opts: shared.Options<T>): Replicant<T> {
-		const existingReplicant = this.find(name, namespace);
-		if (typeof existingReplicant !== 'undefined') {
-			return existingReplicant;
-		}
-
-		return this.declare(name, namespace, opts);
+		this.saveReplicant(replicant);
 	}
 
 	/**
 	 * Emits an event to all remote Socket.IO listeners.
-	 * @param namespace {string} - The namespace in which to emit this event. Only applies to Socket.IO listeners.
-	 * @param eventName {string} - The name of the event to emit.
-	 * @param data {*} - The data to emit with the event.
+	 * @param namespace - The namespace in which to emit this event. Only applies to Socket.IO listeners.
+	 * @param eventName - The name of the event to emit.
+	 * @param data - The data to emit with the event.
 	 */
-	emitToClients(namespace, eventName, data) {
+	emitToClients(namespace: string, eventName: string, data: unknown): void {
 		// Emit to clients (in the given namespace's room) using Socket.IO
 		log.replicants('emitting %s to %s:', eventName, namespace, data);
-		io.to(`replicant:${namespace}`).emit(eventName, data);
+		this.io.to(`replicant:${namespace}`).emit(eventName, data);
 	}
 
 	/**
@@ -205,20 +182,20 @@ export default class Replicator {
 	 * during the same task.
 	 * @param replicant {object} - The Replicant to save.
 	 */
-	saveReplicant(replicant: Replicant): void {
+	saveReplicant(replicant: Replicant<any>): void {
 		if (!replicant.opts.persistent) {
 			return;
 		}
 
-		if (_pendingSave.has(replicant)) {
+		if (this._pendingSave.has(replicant)) {
 			return;
 		}
 
-		_pendingSave.add(replicant);
+		this._pendingSave.add(replicant);
 		replicant.log.replicants('Will persist value at end of current tick.');
 
 		process.nextTick(() => {
-			_pendingSave.delete(replicant);
+			this._pendingSave.delete(replicant);
 
 			if (!replicant.opts.persistent) {
 				return;
@@ -246,7 +223,7 @@ export default class Replicator {
 	saveAllReplicants(): void {
 		for (const replicants of Object.values(declaredReplicants)) {
 			for (const replicant of Object.values(replicants)) {
-				saveReplicant(replicant);
+				this.saveReplicant(replicant);
 			}
 		}
 	}

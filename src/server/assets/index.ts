@@ -14,7 +14,7 @@ import { authCheck, debounceName } from '../util';
 import * as bundlesLib from '../bundle-manager';
 import createLogger from '../logger';
 import Replicant from '../replicant';
-import Replicator from '../replicator';
+import Replicator from '../replicant/replicator';
 
 type Collection = {
 	name: string;

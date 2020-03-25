@@ -50,7 +50,7 @@ import bundleManager = require('../bundle-manager');
 import createLogger from '../logger';
 import socketAuthMiddleware from '../login/socketAuthMiddleware';
 import socketApiMiddleware from './socketApiMiddleware';
-import Replicator from '../replicator';
+import Replicator from '../replicant/replicator';
 
 const renderTemplate = memoize((content, options) => {
 	return template(content)(options);
