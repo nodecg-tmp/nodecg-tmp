@@ -51,6 +51,7 @@ import createLogger from '../logger';
 import socketAuthMiddleware from '../login/socketAuthMiddleware';
 import socketApiMiddleware from './socketApiMiddleware';
 import Replicator from '../replicant/replicator';
+import * as db from '../database';
 
 const renderTemplate = memoize((content, options) => {
 	return template(content)(options);
@@ -108,6 +109,7 @@ export default class NodeCGServer extends EventEmitter {
 		const { _app: app, _io: io, _server: server, log } = this;
 		log.info('Starting NodeCG %s (Running on Node.js %s)', pjson.version, process.version);
 
+		const database = await db.getConnection();
 		if (global.sentryEnabled) {
 			app.use(Sentry.Handlers.requestHandler());
 		}
@@ -223,9 +225,11 @@ export default class NodeCGServer extends EventEmitter {
 			}
 		});
 
+		const persistedReplicantEntities = await database.getRepository(db.Replicant).find();
+		const replicator = new Replicator(io, persistedReplicantEntities);
+
 		// Set up "bundles" Replicant.
-		const Replicant = await import('../replicant');
-		const bundlesReplicant = new Replicant('bundles', 'nodecg', {
+		const bundlesReplicant = replicator.declare('bundles', 'nodecg', {
 			schemaPath: path.resolve(__dirname, '../../schemas/bundles.json'),
 			persistent: false,
 		});

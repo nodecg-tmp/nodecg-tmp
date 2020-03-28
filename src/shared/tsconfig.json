@@ -3,7 +3,8 @@
 	"compilerOptions": {
 		"noEmit": true,
 		"rootDir": ".",
-		"module": "commonjs"
+		"module": "commonjs",
+		"allowJs": false
 	},
 	"include": ["./**/*"]
 }

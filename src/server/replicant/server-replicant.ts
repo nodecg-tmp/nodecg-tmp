@@ -1,45 +1,28 @@
 // Native
-import { EventEmitter } from 'events';
 import * as fs from 'fs';
 import * as path from 'path';
 
 // Packages
-import throttle from 'lodash.throttle';
 import $RefParser from 'json-schema-lib';
 import clone from 'clone';
-import { LocalStorage } from 'node-localstorage';
 import schemaDefaults from 'json-schema-defaults';
 import sha1 from 'sha1';
-import validator from 'is-my-json-valid';
-import TypedEmitter from 'typed-emitter';
 
 // Ours
 import {
 	Operation,
 	proxyRecursive,
 	Options,
-	generateValidator,
-	DEFAULT_PERSISTENCE_INTERVAL,
-	Validator,
 	ignoreProxy,
 	resumeProxy,
 	AbstractReplicant,
 } from '../../shared/replicants.shared';
 import replaceRefs from './schema-hacks';
-import createLogger, { LoggerInterface } from '../logger';
+import createLogger from '../logger';
 
-const REPLICANTS_ROOT = path.join(process.env.NODECG_ROOT, 'db/replicants');
-
-interface MessageEvents {
-	_operationQueued: () => void;
-}
-
-/**
- * Never instantiate this directly.
- *
- * Always use Replicator.declare instead.
- * The Replicator needs to have complete control over the ServerReplicant class.
- */
+// Never instantiate this directly.
+// Always use Replicator.declare instead.
+// The Replicator needs to have complete control over the ServerReplicant class.
 export default class ServerReplicant<T> extends AbstractReplicant<T> {
 	get value(): T | undefined {
 		return this._value;
@@ -66,7 +49,7 @@ export default class ServerReplicant<T> extends AbstractReplicant<T> {
 		});
 	}
 
-	constructor(name: string, namespace: string, opts: Options<T> = {}) {
+	constructor(name: string, namespace: string, opts: Options<T> = {}, startingValue: T | undefined = undefined) {
 		super(name, namespace, opts);
 
 		this.log = createLogger(`Replicant/${namespace}.${name}`);
@@ -79,33 +62,29 @@ export default class ServerReplicant<T> extends AbstractReplicant<T> {
 			if (fs.existsSync(absoluteSchemaPath)) {
 				try {
 					const rawSchema = $RefParser.readSync(absoluteSchemaPath);
-					const parsedSchema = replaceRefs(rawSchema.root, rawSchema.rootFile, rawSchema.files);
+					const parsedSchema = replaceRefs(
+						rawSchema.root,
+						rawSchema.rootFile,
+						rawSchema.files,
+					);
 					if (!parsedSchema) {
 						throw new Error('parsed schema was unexpectedly undefined');
 					}
 
 					this.schema = parsedSchema;
 					this.schemaSum = sha1(JSON.stringify(parsedSchema));
-					this.validate = generateValidator(this);
+					this.validate = this._generateValidator();
 				} catch (e) {
 					/* istanbul ignore next */
 					if (!process.env.NODECG_TEST) {
-						this.log.error('Schema could not be loaded, are you sure that it is valid JSON?\n', e.stack);
+						this.log.error(
+							'Schema could not be loaded, are you sure that it is valid JSON?\n',
+							e.stack,
+						);
 					}
 				}
 			}
 		}
-
-		// Initialize the storage object if not present
-		if (!{}.hasOwnProperty.call(replicator.stores, namespace)) {
-			replicator.stores[namespace] = new LocalStorage(path.join(REPLICANTS_ROOT, namespace));
-		}
-
-		// Get the existing value, if any, and JSON parse if its an object
-		let existingValue = replicator.stores[namespace].getItem(`${name}.rep`);
-		try {
-			existingValue = existingValue === '' ? undefined : JSON.parse(existingValue);
-		} catch (_) {}
 
 		// Set the default value, if a schema is present and no default value was provided.
 		if (this.schema && typeof opts.defaultValue === 'undefined') {
@@ -114,10 +93,10 @@ export default class ServerReplicant<T> extends AbstractReplicant<T> {
 
 		// If `opts.persistent` is true and this replicant has a persisted value, try to load that persisted value.
 		// Else, apply `opts.defaultValue`.
-		if (opts.persistent && typeof existingValue !== 'undefined' && existingValue !== null) {
-			if (this.validate(existingValue, { throwOnInvalid: false })) {
-				this.value = existingValue;
-				this.log.replicants('Loaded a persisted value from localStorage:', existingValue);
+		if (opts.persistent && typeof startingValue !== 'undefined' && startingValue !== null) {
+			if (this.validate(startingValue, { throwOnInvalid: false })) {
+				this.value = startingValue;
+				this.log.replicants('Loaded a persisted value:', startingValue);
 			} else {
 				this.value = schemaDefaults(this.schema);
 				this.log.replicants(
@@ -138,20 +117,14 @@ export default class ServerReplicant<T> extends AbstractReplicant<T> {
 				namespace,
 				opts.defaultValue,
 			);
-			replicator.saveReplicant(this);
 		}
-
-		this._requestSaveReplicant = throttle(() => replicator.saveReplicant(this), this.opts.persistenceInterval);
 	}
 
 	/**
-	 * Adds an operation to the operation queue, to be flushed at the end of the current tick.
-	 * @param path {string} - The object path to where this operation took place.
-	 * @param method {string} - The name of the operation.
-	 * @param args {array} - The arguments provided to this operation
+	 * Refer to the abstract base class' implementation for details.
 	 * @private
 	 */
-	private _addOperation(operation: Operation<T>): void {
+	_addOperation(operation: Operation<T>): void {
 		this._operationQueue.push(operation);
 		if (!this._pendingOperationFlush) {
 			this._oldValue = clone(this.value);
@@ -161,19 +134,18 @@ export default class ServerReplicant<T> extends AbstractReplicant<T> {
 	}
 
 	/**
-	 * Emits all queued operations via Socket.IO & empties this._operationQueue.
+	 * Refer to the abstract base class' implementation for details.
 	 * @private
 	 */
-	private _flushOperations(): void {
+	_flushOperations(): void {
 		this._pendingOperationFlush = false;
 		this.revision++;
-		replicator.emitToClients(this.namespace, 'replicant:operations', {
+		this.emit('operations', {
 			name: this.name,
 			namespace: this.namespace,
 			operations: this._operationQueue,
 			revision: this.revision,
 		});
-		this._requestSaveReplicant();
 		this.emit('change', this.value, this._oldValue, this._operationQueue);
 		this._operationQueue = [];
 	}

@@ -14,11 +14,4 @@ declare namespace NodeJS {
 		 */
 		NODECG_ROOT: string;
 	}
-
-	export interface Process {
-		/**
-		 * This comes from webpack.
-		 */
-		browser: boolean;
-	}
 }

@@ -34,6 +34,7 @@ const config: webpack.Configuration = {
 			{ test: /\.js$/, loader: 'babel-loader' },
 		],
 	},
+	plugins: [new webpack.EnvironmentPlugin(['BROWSER'])],
 };
 
 export default config;
