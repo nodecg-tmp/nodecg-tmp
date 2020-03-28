@@ -12,25 +12,14 @@ import config, { filteredConfig } from '../config';
 import { noop } from '../util';
 
 type Options = {
-	standalone: boolean;
-	createApiInstance: NodeCG.Bundle;
-	sound: boolean;
-	fullbleed: boolean;
+	standalone?: boolean;
+	createApiInstance?: NodeCG.Bundle;
+	sound?: boolean;
+	fullbleed?: boolean;
 };
 
 /**
  * Injects the appropriate assets into a panel, dialog, or graphic.
- * @param {string} pathOrHtml - Either the path to an HTML file, or a string of HTML.
- * @param {('panel'|'dialog'|'graphic')} resourceType
- * @param {Object} [opts] - The options object.
- * @param {boolean} [opts.standalone] - Whether or not to inject the scripts required to serve a panel or dialog
- * as a standlone webpage, outside of the dashboard. Only applies when `resourceType` is `panel` or `dialog`.
- * @param {boolean} [opts.createApiInstance] - If provided, creates an API instance for the bundle.
- * @param {boolean} [opts.singleInstance] - Whether or not to inject the singleInstance scripts.
- * Only applies when `resourceType` is `graphic`.
- * @param {boolean} [opts.sound] - Whether or not to inject the sound playback scripts.
- * Only applies when `resourceType` is `graphic`.
- * @param cb
  */
 export default function(
 	pathOrHtml: string,

@@ -90,7 +90,7 @@ declare namespace NodeCG {
 
 		export type Graphic = {
 			url: string;
-		} & Manifest.UnparsedGraphic;
+		} & Required<Manifest.UnparsedGraphic>;
 
 		export type Panel = Manifest.UnparsedPanel & {
 			path: string;

@@ -44,6 +44,7 @@ import transformMiddleware from 'express-transform-bare-module-specifiers';
 import compression from 'compression';
 import { Server } from 'http';
 import SocketIO from 'socket.io';
+import appRootPath from 'app-root-path';
 
 // Ours
 import bundleManager = require('../bundle-manager');
@@ -65,8 +66,6 @@ export default class NodeCGServer extends EventEmitter {
 	private readonly _app = express();
 
 	private readonly _server: Server;
-
-	private readonly _replicator: Replicator;
 
 	constructor() {
 		super();
@@ -95,14 +94,6 @@ export default class NodeCGServer extends EventEmitter {
 		}
 
 		this._server = server;
-
-		/**
-		 * Replicator setup
-		 */
-		this._replicator = new Replicator(this._io);
-		this._io.sockets.on('connection', socket => {
-			this._replicator.attachToSocket(socket);
-		});
 	}
 
 	async start(): Promise<void> {
@@ -190,8 +181,8 @@ export default class NodeCGServer extends EventEmitter {
 			app.use(sentryHelpers.app);
 		}
 
-		const graphics = await import('../graphics');
-		app.use(graphics);
+		const graphics = new GraphicsLib(io);
+		app.use(graphic.app);
 
 		const dashboard = await import('../dashboard.ts');
 		app.use(dashboard);
@@ -225,12 +216,15 @@ export default class NodeCGServer extends EventEmitter {
 			}
 		});
 
+		/**
+		 * Replicator setup
+		 */
 		const persistedReplicantEntities = await database.getRepository(db.Replicant).find();
 		const replicator = new Replicator(io, persistedReplicantEntities);
 
 		// Set up "bundles" Replicant.
 		const bundlesReplicant = replicator.declare('bundles', 'nodecg', {
-			schemaPath: path.resolve(__dirname, '../../schemas/bundles.json'),
+			schemaPath: path.resolve(appRootPath.path, 'schemas/bundles.json'),
 			persistent: false,
 		});
 		const updateBundlesReplicant = debounce(() => {
