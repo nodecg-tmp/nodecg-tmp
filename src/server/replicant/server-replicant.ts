@@ -88,7 +88,7 @@ export default class ServerReplicant<T> extends AbstractReplicant<T> {
 
 		// Set the default value, if a schema is present and no default value was provided.
 		if (this.schema && typeof opts.defaultValue === 'undefined') {
-			opts.defaultValue = schemaDefaults(this.schema);
+			opts.defaultValue = schemaDefaults(this.schema) as T;
 		}
 
 		// If `opts.persistent` is true and this replicant has a persisted value, try to load that persisted value.
@@ -97,8 +97,8 @@ export default class ServerReplicant<T> extends AbstractReplicant<T> {
 			if (this.validate(startingValue, { throwOnInvalid: false })) {
 				this.value = startingValue;
 				this.log.replicants('Loaded a persisted value:', startingValue);
-			} else {
-				this.value = schemaDefaults(this.schema);
+			} else if (this.schema) {
+				this.value = schemaDefaults(this.schema) as T;
 				this.log.replicants(
 					'Discarded persisted value, as it failed schema validation. Replaced with defaults from schema.',
 				);

@@ -87,6 +87,16 @@ export default class Replicator {
 		const rep = new Replicant(name, namespace, opts, parsedPersistedValue);
 		this.declaredReplicants.get(namespace)!.set(name, rep);
 
+		// Add persistence hooks
+		rep.on('change', () => {
+			this.saveReplicant(rep);
+		});
+
+		// Listen for server-side operations
+		rep.on('operations', data => {
+			this.emitToClients(rep.namespace, 'replicant:operations', data);
+		});
+
 		return rep;
 	}
 
@@ -100,15 +110,12 @@ export default class Replicator {
 		operations.forEach(operation => replicant._applyOperation(operation));
 		replicant.revision++;
 		replicant.emit('change', replicant.value, oldValue, operations);
-
 		this.emitToClients(replicant.namespace, 'replicant:operations', {
 			name: replicant.name,
 			namespace: replicant.namespace,
 			revision: replicant.revision,
 			operations,
 		});
-
-		this.saveReplicant(replicant);
 	}
 
 	/**
@@ -132,6 +139,10 @@ export default class Replicator {
 	}
 
 	saveReplicant(replicant: ServerReplicant<any>): void {
+		if (!replicant.opts.persistent) {
+			return;
+		}
+
 		throttleName(
 			`${this._uuid}:${replicant.namespace}:${replicant.name}`,
 			() => {
