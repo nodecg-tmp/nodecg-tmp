@@ -56,6 +56,8 @@ import * as db from '../database';
 import { TypedServer } from '../../types/socket-protocol';
 import GraphicsLib from '../graphics';
 import DashboardLib from '../dashboard';
+import MountsLib from '../mounts';
+import SoundsLib from '../sounds';
 
 const renderTemplate = memoize((content, options) => {
 	return template(content)(options);
@@ -201,11 +203,11 @@ export default class NodeCGServer extends EventEmitter {
 		const dashboard = new DashboardLib();
 		app.use(dashboard.app);
 
-		const mounts = await import('../mounts');
-		app.use(mounts.default);
+		const mounts = new MountsLib();
+		app.use(mounts.app);
 
-		const sounds = await import('../sounds');
-		app.use(sounds);
+		const sounds = new SoundsLib(replicator);
+		app.use(sounds.app);
 
 		const assets = await import('../assets');
 		app.use(assets);

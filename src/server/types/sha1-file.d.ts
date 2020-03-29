@@ -1,6 +1,9 @@
 declare module 'sha1-file' {
 	type ErrorCb = (error: Error) => void;
-	type SumCb = (error: null, sum: string) => void
+	type SumCb = (error: null, sum: string) => void;
 	type Callback = ErrorCb | SumCb;
-	export = (filepath: string, callback: Callback): void
+
+	function sha1File(filepath: string, callback: Callback): void;
+	function sha1File(filepath: string): string;
+	export = sha1File;
 }
