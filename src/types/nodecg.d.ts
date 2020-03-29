@@ -136,6 +136,8 @@ declare namespace NodeCG {
 		export type AssetCategory = Manifest.UnparsedAssetCategory;
 
 		export type BundleDependencies = Manifest.UnparsedBundleDependencies;
+
+		export type DashboardPanel = { html: string } & Manifest.UnparsedPanel;
 	}
 
 	export type Bundle = {
@@ -162,6 +164,7 @@ declare namespace NodeCG {
 		soundCues: Bundle.SoundCue[];
 		compatibleRange: string;
 		bundleDependencies?: Bundle.BundleDependencies;
+		dashboardPanels: Bundle.DashboardPanel[];
 	};
 
 	export interface SocketEvents extends SocketIOConnectionEvents {

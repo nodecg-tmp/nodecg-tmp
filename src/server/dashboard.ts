@@ -5,151 +5,161 @@ import path from 'path';
 // Packages
 import clone from 'clone';
 import express from 'express';
+import { Except } from 'type-fest';
 
 // Ours
-import bundles from './bundle-manager';
-import configHelper from './config/index';
+import * as bundles from './bundle-manager';
+import config, { filteredConfig } from './config';
 import createLogger from './logger';
-import * as ncgUtils from './util/index';
+import * as ncgUtils from './util';
+
+type DashboardContext = {
+	bundles: Array<
+		Except<NodeCG.Bundle, 'dashboardPanels'> & {
+			dashboardPanels: Array<Except<NodeCG.Bundle.DashboardPanel, 'html'>>;
+		}
+	>;
+	publicConfig: typeof filteredConfig;
+	privateConfig: typeof config;
+	workspaces: Workspace[];
+};
+
+type Workspace = {
+	name: string;
+	label: string;
+	route: string;
+	fullbleed?: boolean;
+};
 
 const log = createLogger('nodecg/lib/dashboard');
-const app = express();
 const INSTRUMENTED_PATH = path.join(__dirname, '../instrumented');
 const BUILD_PATH = path.join(__dirname, '../build/client');
 
-let dashboardContext = null;
+export default class DashboardLib {
+	app = express();
 
-log.trace('Adding Express routes');
+	dashboardContext: DashboardContext | null = null;
 
-app.use('/node_modules', express.static(path.resolve(__dirname, '../node_modules')));
+	constructor() {
+		const { app } = this;
 
-app.get('/', (req, res) => res.redirect('/dashboard/'));
+		app.use('/node_modules', express.static(path.resolve(__dirname, '../node_modules')));
 
-app.get('/dashboard', ncgUtils.authCheck, (req, res) => {
-	if (!req.url.endsWith('/')) {
-		return res.redirect('/dashboard/');
-	}
+		app.get('/', (_, res) => res.redirect('/dashboard/'));
 
-	if (!dashboardContext) {
-		dashboardContext = getDashboardContext();
-	}
+		app.get('/dashboard', ncgUtils.authCheck, (req, res) => {
+			if (!req.url.endsWith('/')) {
+				return res.redirect('/dashboard/');
+			}
 
-	res.render(path.join(__dirname, '../client/dashboard/dashboard.tmpl'), dashboardContext);
-});
+			if (!this.dashboardContext) {
+				this.dashboardContext = getDashboardContext();
+			}
 
-app.get('/nodecg-api.min.js', (req, res) => {
-	res.sendFile(path.join(process.env.NODECG_TEST ? INSTRUMENTED_PATH : BUILD_PATH, 'nodecg-api.min.js'));
-});
+			res.render(path.join(__dirname, '../client/dashboard/dashboard.tmpl'), this.dashboardContext);
+		});
 
-app.get('/nodecg-api.min.js.map', (req, res) => {
-	res.sendFile(path.join(process.env.NODECG_TEST ? INSTRUMENTED_PATH : BUILD_PATH, 'nodecg-api.min.js.map'));
-});
+		app.get('/nodecg-api.min.js', (_, res) => {
+			res.sendFile(path.join(process.env.NODECG_TEST ? INSTRUMENTED_PATH : BUILD_PATH, 'nodecg-api.min.js'));
+		});
 
-if (process.env.NODECG_TEST) {
-	log.warn('Serving instrumented files for testing');
-	app.get('/*', (req, res, next) => {
-		const resName = req.params[0];
-		if (!resName.startsWith('dashboard/') && !resName.startsWith('instance/')) {
-			return next();
-		}
+		app.get('/nodecg-api.min.js.map', (_, res) => {
+			res.sendFile(path.join(process.env.NODECG_TEST ? INSTRUMENTED_PATH : BUILD_PATH, 'nodecg-api.min.js.map'));
+		});
 
-		const fp = path.join(INSTRUMENTED_PATH, resName);
-		if (fs.existsSync(fp)) {
-			return res.sendFile(fp, err => {
-				/* istanbul ignore next */
-				if (err && !res.headersSent) {
+		if (process.env.NODECG_TEST) {
+			log.warn('Serving instrumented files for testing');
+			app.get('/*', (req, res, next) => {
+				const resName = req.params[0];
+				if (!resName.startsWith('dashboard/') && !resName.startsWith('instance/')) {
 					return next();
 				}
+
+				const fp = path.join(INSTRUMENTED_PATH, resName);
+				if (fs.existsSync(fp)) {
+					return res.sendFile(fp, (err: NodeJS.ErrnoException) => {
+						/* istanbul ignore next */
+						if (err && !res.headersSent) {
+							return next();
+						}
+					});
+				}
+
+				return next();
 			});
 		}
 
-		return next();
-	});
-}
+		app.get('/bundles/:bundleName/dashboard/*', ncgUtils.authCheck, (req, res, next) => {
+			const { bundleName } = req.params;
+			const bundle = bundles.find(bundleName);
+			if (!bundle) {
+				next();
+				return;
+			}
 
-/**
- * Not all of our files get copied to the BUILD_PATH.
- * Specifically, anything that is not a *.js or *.ts file does not.
- *
- * We don't have a better build system right now, so our cheap fix
- * is to just have a fallback which tries to find files in SRC_PATH
- * if it couldn't find them in BUILD_PATH.
- *
- * This is probably bad for a lot of reasons and should be fixed.
- */
-app.use('/', express.static(SRC_PATH));
+			const resName = req.params[0];
+			// If the target file is a panel or dialog, inject the appropriate scripts.
+			// Else, serve the file as-is.
+			const panel = bundle.dashboardPanels.find(p => p.file === resName);
+			if (panel) {
+				const resourceType = panel.dialog ? 'dialog' : 'panel';
+				ncgUtils.injectScripts(
+					panel.html,
+					resourceType,
+					{
+						createApiInstance: bundle,
+						standalone: req.query.standalone,
+						fullbleed: panel.fullbleed,
+					},
+					html => res.send(html),
+				);
+			} else {
+				const fileLocation = path.join(bundle.dashboard.dir, resName);
+				res.sendFile(fileLocation, (err: NodeJS.ErrnoException) => {
+					if (err) {
+						if (err.code === 'ENOENT') {
+							return next();
+						}
 
-app.get('/bundles/:bundleName/dashboard/*', ncgUtils.authCheck, (req, res, next) => {
-	const { bundleName } = req.params;
-	const bundle = bundles.find(bundleName);
-	if (!bundle) {
-		next();
-		return;
-	}
-
-	const resName = req.params[0];
-	// If the target file is a panel or dialog, inject the appropriate scripts.
-	// Else, serve the file as-is.
-	const panel = bundle.dashboardPanels.find(p => p.file === resName);
-	if (panel) {
-		const resourceType = panel.dialog ? 'dialog' : 'panel';
-		ncgUtils.injectScripts(
-			panel.html,
-			resourceType,
-			{
-				createApiInstance: bundle,
-				standalone: req.query.standalone,
-				fullbleed: panel.fullbleed,
-			},
-			html => res.send(html),
-		);
-	} else {
-		const fileLocation = path.join(bundle.dashboard.dir, resName);
-		res.sendFile(fileLocation, err => {
-			if (err) {
-				if (err.code === 'ENOENT') {
-					return next();
-				}
-
-				/* istanbul ignore next */
-				if (!res.headersSent) {
-					return next();
-				}
+						/* istanbul ignore next */
+						if (!res.headersSent) {
+							return next();
+						}
+					}
+				});
 			}
 		});
+
+		// When a bundle changes, delete the cached dashboard context
+		bundles.default.on('bundleChanged', () => {
+			this.dashboardContext = null;
+		});
 	}
-});
+}
 
-// When a bundle changes, delete the cached dashboard context
-bundles.on('bundleChanged', () => {
-	dashboardContext = null;
-});
-
-module.exports = app;
-
-function getDashboardContext() {
+function getDashboardContext(): DashboardContext {
 	return {
 		bundles: bundles.all().map(bundle => {
 			const cleanedBundle = clone(bundle);
 			if (cleanedBundle.dashboardPanels) {
-				cleanedBundle.dashboardPanels = cleanedBundle.dashboardPanels.forEach(panel => {
+				cleanedBundle.dashboardPanels.forEach(panel => {
 					delete panel.html;
 				});
 			}
 
 			return cleanedBundle;
 		}),
-		publicConfig: configHelper.filteredConfig,
-		privateConfig: configHelper.config,
+		publicConfig: filteredConfig,
+		privateConfig: config,
 		workspaces: parseWorkspaces(),
 	};
 }
 
-function parseWorkspaces() {
+function parseWorkspaces(): Workspace[] {
 	let defaultWorkspaceHasPanels = false;
 	let otherWorkspacesHavePanels = false;
-	const workspaces = [];
-	const workspaceNames = new Set();
+	const workspaces: Workspace[] = [];
+	const workspaceNames = new Set<string>();
 	bundles.all().forEach(bundle => {
 		bundle.dashboard.panels.forEach(panel => {
 			if (panel.dialog) {

@@ -9,7 +9,7 @@ import clone from 'clone';
 import createLogger from '../logger';
 import * as shared from '../../shared/replicants.shared';
 import Replicant from './server-replicant';
-import { noop, throttleName } from '../util';
+import { throttleName } from '../util';
 import ServerReplicant from './server-replicant';
 import uuid from 'uuid';
 import * as db from '../database';

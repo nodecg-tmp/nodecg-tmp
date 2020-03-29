@@ -105,12 +105,14 @@ export interface ProtocolDefinition extends ServerDefinition {
 								name: string;
 								namespace: string;
 								operations: Array<ReplicantOperation<any>>;
+								opts: ReplicantOptions<any>;
 								revision: number;
 						  }
 						| {
 								name: string;
 								namespace: string;
 								operations: Array<ReplicantOperation<any>>;
+								opts: ReplicantOptions<any>;
 								revision: number;
 								schema: { [k: string]: any };
 								schemaSum: string;

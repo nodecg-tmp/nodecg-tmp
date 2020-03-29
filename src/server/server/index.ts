@@ -55,6 +55,7 @@ import Replicator from '../replicant/replicator';
 import * as db from '../database';
 import { TypedServer } from '../../types/socket-protocol';
 import GraphicsLib from '../graphics';
+import DashboardLib from '../dashboard';
 
 const renderTemplate = memoize((content, options) => {
 	return template(content)(options);
@@ -195,10 +196,10 @@ export default class NodeCGServer extends EventEmitter {
 		const replicator = new Replicator(io, persistedReplicantEntities);
 
 		const graphics = new GraphicsLib(io, replicator);
-		app.use(graphic.app);
+		app.use(graphics.app);
 
-		const dashboard = await import('../dashboard.ts');
-		app.use(dashboard);
+		const dashboard = new DashboardLib();
+		app.use(dashboard.app);
 
 		const mounts = await import('../mounts');
 		app.use(mounts.default);
