@@ -47,7 +47,7 @@ import SocketIO from 'socket.io';
 import appRootPath from 'app-root-path';
 
 // Ours
-import bundleManager = require('../bundle-manager');
+import bundleEvents, * as bundleApi from '../bundle-manager';
 import createLogger from '../logger';
 import socketAuthMiddleware from '../login/socketAuthMiddleware';
 import socketApiMiddleware from './socketApiMiddleware';
@@ -60,6 +60,7 @@ import MountsLib from '../mounts';
 import SoundsLib from '../sounds';
 import AssetManager from '../assets';
 import SharedSourcesLib from '../shared-sources';
+import * as extensionApi from './extensions';
 
 const renderTemplate = memoize((content, options) => {
 	return template(content)(options);
@@ -73,6 +74,8 @@ export default class NodeCGServer extends EventEmitter {
 	private readonly _app = express();
 
 	private readonly _server: Server;
+
+	private _replicator: Replicator;
 
 	constructor() {
 		super();
@@ -155,8 +158,8 @@ export default class NodeCGServer extends EventEmitter {
 
 		const bundlesPaths = [path.join(process.env.NODECG_ROOT, 'bundles')].concat(config.bundles.paths);
 		const cfgPath = path.join(process.env.NODECG_ROOT, 'cfg');
-		bundleManager.init(bundlesPaths, cfgPath, pjson.version, config);
-		bundleManager.all().forEach(bundle => {
+		bundleApi.init(bundlesPaths, cfgPath, pjson.version, config);
+		bundleApi.all().forEach(bundle => {
 			// TODO: deprecate this feature once Import Maps are shipped and stable in browsers.
 			// TODO: remove this feature after Import Maps have been around a while (like a year maybe).
 			if (bundle.transformBareModuleSpecifiers) {
@@ -195,6 +198,7 @@ export default class NodeCGServer extends EventEmitter {
 
 		const persistedReplicantEntities = await database.getRepository(db.Replicant).find();
 		const replicator = new Replicator(io, persistedReplicantEntities);
+		this._replicator = replicator;
 
 		const graphics = new GraphicsLib(io, replicator);
 		app.use(graphics.app);
@@ -237,16 +241,15 @@ export default class NodeCGServer extends EventEmitter {
 			persistent: false,
 		});
 		const updateBundlesReplicant = debounce(() => {
-			bundlesReplicant.value = clone(bundleManager.all());
+			bundlesReplicant.value = clone(bundleApi.all());
 		}, 100);
-		bundleManager.on('init', updateBundlesReplicant);
-		bundleManager.on('bundleChanged', updateBundlesReplicant);
-		bundleManager.on('gitChanged', updateBundlesReplicant);
-		bundleManager.on('bundleRemoved', updateBundlesReplicant);
+		bundleEvents.on('init', updateBundlesReplicant);
+		bundleEvents.on('bundleChanged', updateBundlesReplicant);
+		bundleEvents.on('gitChanged', updateBundlesReplicant);
+		bundleEvents.on('bundleRemoved', updateBundlesReplicant);
 		updateBundlesReplicant();
 
-		extensionManager = await import('./extensions');
-		extensionManager.init();
+		extensionApi.init();
 		this.emit('extensionsLoaded');
 
 		// We intentionally wait until all bundles and extensions are loaded before starting the server.
@@ -296,12 +299,15 @@ export default class NodeCGServer extends EventEmitter {
 			});
 		});
 
-		replicator.saveAllReplicants();
+		if (this._replicator) {
+			this._replicator.saveAllReplicants();
+		}
+
 		this.emit('stopped');
 	}
 
 	getExtensions(): { [k: string]: unknown } {
-		return this._extensionManager.getExtensions();
+		return extensionApi.getExtensions();
 	}
 
 	getSocketIOServer(): TypedServer {
