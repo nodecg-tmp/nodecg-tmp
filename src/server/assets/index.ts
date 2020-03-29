@@ -13,8 +13,8 @@ import AssetFile from './AssetFile';
 import { authCheck, debounceName } from '../util';
 import * as bundlesLib from '../bundle-manager';
 import createLogger from '../logger';
-import Replicant from '../replicant';
 import Replicator from '../replicant/replicator';
+import ServerReplicant from '../replicant/server-replicant';
 
 type Collection = {
 	name: string;
@@ -26,11 +26,13 @@ export default class AssetManager {
 
 	readonly assetsRoot = path.join(process.env.NODECG_ROOT, 'assets');
 
-	readonly collectionsRep: Replicant<Collection[]>;
+	readonly collectionsRep: ServerReplicant<Collection[]>;
 
-	readonly app: Express.Application;
+	readonly app: ReturnType<typeof express>;
 
-	private readonly _repsByNamespace = new Map<string, Map<string, Replicant<AssetFile[]>>>();
+	private readonly _repsByNamespace = new Map<string, Map<string, ServerReplicant<AssetFile[]>>>();
+
+	private readonly _replicator: Replicator;
 
 	constructor(replicator: Replicator) {
 		// Create assetsRoot folder if it does not exist.
@@ -39,7 +41,7 @@ export default class AssetManager {
 			fs.mkdirSync(this.assetsRoot);
 		}
 
-		this.collectionsRep = replicator.findOrDeclare('collections', '_assets', {
+		this.collectionsRep = replicator.declare<Collection[]>('collections', '_assets', {
 			defaultValue: [],
 			persistent: false,
 		});
@@ -47,6 +49,7 @@ export default class AssetManager {
 		const { watchPatterns } = this._computeCollections(bundlesLib.all());
 		this._setupWatcher(watchPatterns);
 		this.app = this._setupExpress();
+		this._replicator = replicator;
 	}
 
 	private _computeCollections(bundles: NodeCG.Bundle[]): { collections: Collection[]; watchPatterns: Set<string> } {
@@ -74,7 +77,7 @@ export default class AssetManager {
 
 		collections.forEach(({ name, categories }) => {
 			const namespacedAssetsPath = this._calcNamespacedAssetsPath(name);
-			const collectionReps = new Map<string, Replicant<AssetFile[]>>();
+			const collectionReps = new Map<string, ServerReplicant<AssetFile[]>>();
 			this._repsByNamespace.set(name, collectionReps);
 			this.collectionsRep.value!.push({ name, categories });
 
@@ -87,7 +90,7 @@ export default class AssetManager {
 
 				collectionReps.set(
 					category.name,
-					new Replicant<AssetFile[]>(`assets:${category.name}`, name, {
+					this._replicator.declare<AssetFile[]>(`assets:${category.name}`, name, {
 						defaultValue: [],
 						persistent: false,
 					}),
@@ -197,7 +200,7 @@ export default class AssetManager {
 		watcher.on('error', e => this.log.error(e.stack));
 	}
 
-	private _setupExpress(): Express.Application {
+	private _setupExpress(): ReturnType<typeof express> {
 		const app = express();
 		const upload = multer({
 			storage: multer.diskStorage({
@@ -333,7 +336,7 @@ export default class AssetManager {
 		}
 	}
 
-	private _getCollectRep(namespace: string, category: string): Replicant<AssetFile[]> | undefined {
+	private _getCollectRep(namespace: string, category: string): ServerReplicant<AssetFile[]> | undefined {
 		const nspReps = this._repsByNamespace.get(namespace);
 		if (nspReps) {
 			return nspReps.get(category);

@@ -58,6 +58,8 @@ import GraphicsLib from '../graphics';
 import DashboardLib from '../dashboard';
 import MountsLib from '../mounts';
 import SoundsLib from '../sounds';
+import AssetManager from '../assets';
+import SharedSourcesLib from '../shared-sources';
 
 const renderTemplate = memoize((content, options) => {
 	return template(content)(options);
@@ -191,9 +193,6 @@ export default class NodeCGServer extends EventEmitter {
 			app.use(sentryHelpers.app);
 		}
 
-		/**
-		 * Replicator setup
-		 */
 		const persistedReplicantEntities = await database.getRepository(db.Replicant).find();
 		const replicator = new Replicator(io, persistedReplicantEntities);
 
@@ -209,11 +208,11 @@ export default class NodeCGServer extends EventEmitter {
 		const sounds = new SoundsLib(replicator);
 		app.use(sounds.app);
 
-		const assets = await import('../assets');
-		app.use(assets);
+		const assets = new AssetManager(replicator);
+		app.use(assets.app);
 
-		const sharedSources = await import('../shared-sources');
-		app.use(sharedSources);
+		const sharedSources = new SharedSourcesLib();
+		app.use(sharedSources.app);
 
 		if (global.sentryEnabled) {
 			app.use(Sentry.Handlers.errorHandler());

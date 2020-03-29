@@ -31,5 +31,3 @@ export default class AssetFile {
 		this.url = `/assets/${this.namespace}/${this.category}/${parsedPath.base}`;
 	}
 }
-
-module.exports = AssetFile;
