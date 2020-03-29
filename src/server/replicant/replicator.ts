@@ -4,7 +4,6 @@ import * as path from 'path';
 // Packages
 import * as fs from 'fs-extra';
 import clone from 'clone';
-import * as SocketIO from 'socket.io';
 
 // Ours
 import createLogger from '../logger';
@@ -14,13 +13,14 @@ import { noop, throttleName } from '../util';
 import ServerReplicant from './server-replicant';
 import uuid from 'uuid';
 import * as db from '../database';
+import { RootNS, TypedServerSocket, ProtocolDefinition } from '../../types/socket-protocol';
 
 const log = createLogger('replicator');
 
 export default class Replicator {
 	readonly replicantsRoot = path.join(process.env.NODECG_ROOT, 'db/replicants');
 
-	readonly io: SocketIO.Server;
+	readonly io: RootNS;
 
 	readonly declaredReplicants = new Map<string, Map<string, Replicant<any>>>();
 
@@ -30,14 +30,14 @@ export default class Replicator {
 
 	private readonly _pendingSave = new WeakSet<Replicant<any>>();
 
-	constructor(io: SocketIO.Server, repEntities: db.Replicant[]) {
+	constructor(io: RootNS, repEntities: db.Replicant[]) {
 		// Make 'db/replicants' folder if it doesn't exist
 		if (!fs.existsSync(this.replicantsRoot)) {
 			fs.mkdirpSync(this.replicantsRoot);
 		}
 
 		this.io = io;
-		io.sockets.on('connection', socket => {
+		io.on('connection', socket => {
 			this._attachToSocket(socket);
 		});
 
@@ -124,7 +124,11 @@ export default class Replicator {
 	 * @param eventName - The name of the event to emit.
 	 * @param data - The data to emit with the event.
 	 */
-	emitToClients(namespace: string, eventName: string, data: unknown): void {
+	emitToClients<T extends keyof ProtocolDefinition['namespaces']['/']['ServerMessages']>(
+		namespace: string,
+		eventName: T,
+		data: ProtocolDefinition['namespaces']['/']['ServerMessages'][T],
+	): void {
 		// Emit to clients (in the given namespace's room) using Socket.IO
 		log.replicants('emitting %s to %s:', eventName, namespace, data);
 		this.io.to(`replicant:${namespace}`).emit(eventName, data);
@@ -195,45 +199,38 @@ export default class Replicator {
 		}
 	}
 
-	private _attachToSocket(socket: SocketIO.Socket): void {
+	private _attachToSocket(socket: TypedServerSocket): void {
 		socket.on('replicant:declare', (data, cb) => {
 			log.replicants('received replicant:declare', data);
 			try {
 				const replicant = this.declare(data.name, data.namespace, data.opts);
-				if (typeof cb === 'function') {
-					cb({
-						value: replicant.value,
-						revision: replicant.revision,
-						schema: replicant.schema,
-						schemaSum: replicant.schemaSum,
-					});
-				}
+				cb(null, {
+					value: replicant.value,
+					revision: replicant.revision,
+					schema: replicant.schema,
+					schemaSum: replicant.schemaSum,
+				});
 			} catch (e) {
 				if (e.message.startsWith('Invalid value rejected for replicant')) {
-					if (typeof cb === 'function') {
-						cb({
-							rejectReason: e.message,
-						});
-					}
+					cb(e.message);
 				} else {
 					throw e;
 				}
 			}
 		});
 
-		socket.on('replicant:proposeOperations', (data, cb = noop) => {
+		socket.on('replicant:proposeOperations', (data, cb) => {
 			log.replicants('received replicant:proposeOperations', data);
 			const serverReplicant = this.declare(data.name, data.namespace, data.opts);
-			if (serverReplicant.schema && data.schemaSum !== serverReplicant.schemaSum) {
+			if (serverReplicant.schema && (!('schemaSum' in data) || data.schemaSum !== serverReplicant.schemaSum)) {
 				log.replicants(
 					'Change request %s:%s had mismatched schema sum (ours %s, theirs %s), invoking callback with new schema and fullupdate',
 					data.namespace,
 					data.name,
 					serverReplicant.schemaSum,
-					data.schemaSum,
+					'schemaSum' in data ? data.schemaSum : '(no schema)',
 				);
-				cb({
-					rejectReason: 'Mismatched schema version, assignment rejected',
+				cb('Mismatched schema version, assignment rejected', {
 					schema: serverReplicant.schema,
 					schemaSum: serverReplicant.schemaSum,
 					value: serverReplicant.value,
@@ -247,8 +244,7 @@ export default class Replicator {
 					serverReplicant.revision,
 					data.revision,
 				);
-				cb({
-					rejectReason: 'Mismatched revision number, assignment rejected',
+				cb('Mismatched revision number, assignment rejected', {
 					value: serverReplicant.value,
 					revision: serverReplicant.revision,
 				});
@@ -262,9 +258,9 @@ export default class Replicator {
 			const replicant = this.declare(data.name, data.namespace);
 			if (typeof cb === 'function') {
 				if (replicant) {
-					cb(replicant.value);
+					cb(null, replicant.value);
 				} else {
-					cb();
+					cb(null);
 				}
 			}
 		});

@@ -53,6 +53,8 @@ import socketAuthMiddleware from '../login/socketAuthMiddleware';
 import socketApiMiddleware from './socketApiMiddleware';
 import Replicator from '../replicant/replicator';
 import * as db from '../database';
+import { TypedServer } from '../../types/socket-protocol';
+import GraphicsLib from '../graphics';
 
 const renderTemplate = memoize((content, options) => {
 	return template(content)(options);
@@ -61,7 +63,7 @@ const renderTemplate = memoize((content, options) => {
 export default class NodeCGServer extends EventEmitter {
 	readonly log = createLogger('server');
 
-	private readonly _io = SocketIO();
+	private readonly _io = SocketIO() as TypedServer;
 
 	private readonly _app = express();
 
@@ -69,6 +71,20 @@ export default class NodeCGServer extends EventEmitter {
 
 	constructor() {
 		super();
+
+		/**
+		 * Socket.IO server setup.
+		 * We cast to "any" for a few things because
+		 * typed-socket.io isn't quite perfect.
+		 */
+		(this._io as any).on('error', (err: Error) => {
+			if (global.sentryEnabled) {
+				Sentry.captureException(err);
+			}
+
+			this.log.error(err.stack);
+		});
+		(this._io as any).use(socketApiMiddleware);
 
 		/**
 		 * HTTP(S) server setup
@@ -97,7 +113,8 @@ export default class NodeCGServer extends EventEmitter {
 	}
 
 	async start(): Promise<void> {
-		const { _app: app, _io: io, _server: server, log } = this;
+		const { _app: app, _server: server, log } = this;
+		const io = this._io.of('/');
 		log.info('Starting NodeCG %s (Running on Node.js %s)', pjson.version, process.version);
 
 		const database = await db.getConnection();
@@ -146,16 +163,6 @@ export default class NodeCGServer extends EventEmitter {
 			}
 		});
 
-		io.on('error', (err: Error) => {
-			if (global.sentryEnabled) {
-				Sentry.captureException(err);
-			}
-
-			log.error(err.stack);
-		});
-
-		io.use(socketApiMiddleware);
-
 		log.trace(`Attempting to listen on ${config.host}:${config.port}`);
 		server.on('error', err => {
 			switch ((err as any).code) {
@@ -181,7 +188,13 @@ export default class NodeCGServer extends EventEmitter {
 			app.use(sentryHelpers.app);
 		}
 
-		const graphics = new GraphicsLib(io);
+		/**
+		 * Replicator setup
+		 */
+		const persistedReplicantEntities = await database.getRepository(db.Replicant).find();
+		const replicator = new Replicator(io, persistedReplicantEntities);
+
+		const graphics = new GraphicsLib(io, replicator);
 		app.use(graphic.app);
 
 		const dashboard = await import('../dashboard.ts');
@@ -215,12 +228,6 @@ export default class NodeCGServer extends EventEmitter {
 				res.end('Internal error');
 			}
 		});
-
-		/**
-		 * Replicator setup
-		 */
-		const persistedReplicantEntities = await database.getRepository(db.Replicant).find();
-		const replicator = new Replicator(io, persistedReplicantEntities);
 
 		// Set up "bundles" Replicant.
 		const bundlesReplicant = replicator.declare('bundles', 'nodecg', {
@@ -282,7 +289,7 @@ export default class NodeCGServer extends EventEmitter {
 		});
 
 		await new Promise(resolve => {
-			this._io.close(() => {
+			(this._io as any).close(() => {
 				resolve();
 			});
 		});
@@ -295,7 +302,7 @@ export default class NodeCGServer extends EventEmitter {
 		return this._extensionManager.getExtensions();
 	}
 
-	getSocketIOServer(): SocketIO.Server | null {
+	getSocketIOServer(): TypedServer {
 		return this._io;
 	}
 

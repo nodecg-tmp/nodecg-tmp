@@ -3,7 +3,6 @@ import path from 'path';
 
 // Packages
 import express from 'express';
-import SocketIO from 'socket.io';
 import appRootPath from 'app-root-path';
 
 // Ours
@@ -11,6 +10,7 @@ import * as bundles from '../bundle-manager';
 import { injectScripts } from '../util';
 import { Replicator } from '../replicant';
 import ServerReplicant from '../replicant/server-replicant';
+import { RootNS, GraphicRegRequest } from '../../types/socket-protocol';
 
 type GraphicsInstance = {
 	ipv4: string;
@@ -32,7 +32,7 @@ export default class RegistrationCoordinator {
 
 	private readonly _instancesRep: ServerReplicant<GraphicsInstance[]>;
 
-	constructor(io: SocketIO.Server, replicator: Replicator) {
+	constructor(io: RootNS, replicator: Replicator) {
 		const { app } = this;
 
 		this._instancesRep = replicator.declare('graphics:instances', 'nodecg', {
@@ -54,7 +54,7 @@ export default class RegistrationCoordinator {
 				const bundle = bundles.find(bundleName);
 				/* istanbul ignore if: simple error trapping */
 				if (!bundle) {
-					cb(false);
+					cb(null, false);
 					return;
 				}
 
@@ -62,7 +62,7 @@ export default class RegistrationCoordinator {
 
 				/* istanbul ignore if: simple error trapping */
 				if (!graphicManifest) {
-					cb(false);
+					cb(null, false);
 					return;
 				}
 
@@ -74,10 +74,10 @@ export default class RegistrationCoordinator {
 				// then deny the registration, unless the socket ID matches.
 				if (existingPathRegistration && graphicManifest.singleInstance) {
 					if (existingPathRegistration.socketId === socket.id) {
-						return cb(true);
+						return cb(null, true);
 					}
 
-					cb(!existingPathRegistration.open);
+					cb(null, !existingPathRegistration.open);
 					return;
 				}
 
@@ -86,11 +86,12 @@ export default class RegistrationCoordinator {
 				} else {
 					this._addRegistration({
 						...regRequest,
-						ipv4: socket.request.connection.remoteAddress,
+						ipv4: (socket as any).request.connection.remoteAddress,
 						socketId: socket.id,
 						singleInstance: Boolean(graphicManifest.singleInstance),
 						potentiallyOutOfDate:
 							calcBundleGitMismatch(bundle, regRequest) || calcBundleVersionMismatch(bundle, regRequest),
+						open: true,
 					});
 
 					if (graphicManifest.singleInstance) {
@@ -98,44 +99,38 @@ export default class RegistrationCoordinator {
 					}
 				}
 
-				cb(true);
+				cb(null, true);
 			});
 
 			socket.on('graphic:queryAvailability', (pathName, cb) => {
-				cb(!this._findOpenRegistrationByPathName(pathName));
+				cb(null, !this._findOpenRegistrationByPathName(pathName));
 			});
 
 			socket.on('graphic:requestBundleRefresh', (bundleName, cb) => {
 				const bundle = bundles.find(bundleName);
 				if (!bundle) {
-					return cb();
+					return cb(null);
 				}
 
 				io.emit('graphic:bundleRefresh', bundleName);
-				if (typeof cb === 'function') {
-					cb();
-				}
+				cb(null);
 			});
 
 			socket.on('graphic:requestRefreshAll', (graphic, cb) => {
 				io.emit('graphic:refreshAll', graphic);
 				if (typeof cb === 'function') {
-					cb();
+					cb(null);
 				}
 			});
 
 			socket.on('graphic:requestRefresh', (instance, cb) => {
 				io.emit('graphic:refresh', instance);
-				if (typeof cb === 'function') {
-					cb();
-				}
+				cb(null);
 			});
 
 			socket.on('graphic:requestKill', (instance, cb) => {
 				io.emit('graphic:kill', instance);
-				if (typeof cb === 'function') {
-					cb();
-				}
+				cb(null);
 			});
 
 			socket.on('disconnect', () => {
@@ -245,7 +240,7 @@ function findGraphicManifest({
 	});
 }
 
-function calcBundleGitMismatch(bundle: NodeCG.Bundle, regRequest): boolean {
+function calcBundleGitMismatch(bundle: NodeCG.Bundle, regRequest: GraphicRegRequest): boolean {
 	if (regRequest.bundleGit && (!bundle.git || bundle.git === null)) {
 		return true;
 	}
@@ -254,9 +249,9 @@ function calcBundleGitMismatch(bundle: NodeCG.Bundle, regRequest): boolean {
 		return true;
 	}
 
-	return regRequest.bundleGit.hash !== bundle.git.hash;
+	return regRequest.bundleGit!.hash !== bundle.git!.hash;
 }
 
-function calcBundleVersionMismatch(bundle: NodeCG.Bundle, regRequest): boolean {
+function calcBundleVersionMismatch(bundle: NodeCG.Bundle, regRequest: GraphicRegRequest): boolean {
 	return bundle.version !== regRequest.bundleVersion;
 }

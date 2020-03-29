@@ -3,18 +3,18 @@ import path from 'path';
 
 // Packages
 import express from 'express';
-import SocketIO from 'socket.io';
 
 // Ours
 import * as bundles from '../bundle-manager';
 import { authCheck, injectScripts } from '../util';
 import RegistrationCoordinator from './registration';
 import { Replicator } from '../replicant';
+import { RootNS } from '../../types/socket-protocol';
 
 export default class GraphicsLib {
 	app = express();
 
-	constructor(io: SocketIO.Server, replicator: Replicator) {
+	constructor(io: RootNS, replicator: Replicator) {
 		const { app } = this;
 
 		// Start up the registration lib, which tracks how many instances of

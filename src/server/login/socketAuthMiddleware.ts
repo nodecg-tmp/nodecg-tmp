@@ -1,17 +1,18 @@
 // Packages
-import * as SocketIO from 'socket.io';
+import SocketIO from 'socket.io';
 
 // Ours
 import { getConnection, ApiKey } from '../database';
 import { isSuperUser } from '../database/utils';
 import config from '../config';
 import UnauthorizedError, { Code as UnauthErrCode } from '../login/UnauthorizedError';
+import { TypedServerSocket } from '../../types/socket-protocol';
 
-const socketsByKey = new Map<string, Set<SocketIO.Socket>>();
+const socketsByKey = new Map<string, Set<TypedServerSocket>>();
 
-export default async function(socket: SocketIO.Socket, next: SocketIO.NextFunction): Promise<void> {
+export default async function(socket: TypedServerSocket, next: SocketIO.NextFunction): Promise<void> {
 	try {
-		const req = socket.request;
+		const req = (socket as any).request; // Not typed in the typed-socket.io lib for some reason.
 		const token = req.token;
 		const database = await getConnection();
 		const apiKey = await database
@@ -38,7 +39,7 @@ export default async function(socket: SocketIO.Socket, next: SocketIO.NextFuncti
 
 		if (allowed) {
 			if (!socketsByKey.has(token)) {
-				socketsByKey.set(token, new Set<SocketIO.Socket>());
+				socketsByKey.set(token, new Set<TypedServerSocket>());
 			}
 
 			const socketSet = socketsByKey.get(token);
@@ -49,7 +50,7 @@ export default async function(socket: SocketIO.Socket, next: SocketIO.NextFuncti
 
 			socketSet.add(socket);
 
-			socket.on('regenerateToken', async (cb?: SocketIO.Acknowledgement) => {
+			socket.on('regenerateToken', async (_, cb) => {
 				try {
 					// Lookup the ApiKey for this token we want to revoke.
 					const keyToDelete = await database
@@ -79,12 +80,12 @@ export default async function(socket: SocketIO.Socket, next: SocketIO.NextFuncti
 						await database.manager.delete(ApiKey, { secret_key: token });
 
 						if (cb) {
-							cb();
+							cb(null);
 						}
 					} else {
 						// Something is weird if we're here, just close the socket.
 						if (cb) {
-							cb();
+							cb(null);
 						}
 
 						socket.disconnect(true);
