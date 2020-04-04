@@ -172,6 +172,10 @@ export class NodeCGAPIClient extends NodeCGAPIBase {
 		window.socket.emit('replicant:read', { name, namespace }, cb);
 	}
 
+	static Replicant<T>(name: string, namespace: string, opts: Options<T>) {
+		return this._replicantFactory(name, namespace, opts);
+	}
+
 	/**
 	 * _Browser only_<br/>
 	 * Returns the specified dialog element.

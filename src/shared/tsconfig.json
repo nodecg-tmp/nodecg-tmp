@@ -6,5 +6,5 @@
 		"module": "commonjs",
 		"allowJs": false
 	},
-	"include": ["./**/*"]
+	"include": ["./**/*", "../types/**/*"]
 }

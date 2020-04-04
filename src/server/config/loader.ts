@@ -1,121 +1,91 @@
-// Native
-import fs from 'fs';
-
 // Packages
 import clone from 'clone';
+import * as Joi from '@hapi/joi';
+import 'joi-extract-type';
 import { cosmiconfigSync as cosmiconfig } from 'cosmiconfig';
+import { SetOptional } from 'type-fest';
+import { argv } from 'yargs';
 
-const CONVICT_LOG_LEVEL = {
-	doc: 'The lowest level of output to log. "trace" is the most, "error" is the least.',
-	format(val: unknown) {
-		return ['trace', 'debug', 'info', 'warn', 'error'].includes(val as string);
-	},
-	default: 'info',
-};
-
-const VALIDATE_STRING_ARRAY = function(val: unknown): boolean {
-	return Array.isArray(val) && val.every(item => typeof item === 'string');
-};
+const LOG_LEVELS = ['trace', 'debug', 'info', 'warn', 'error'];
 
 // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
-function generateConfigSchema(userCfgPath: string) {
-	const userCfgExists = fs.existsSync(userCfgPath);
+function getConfigSchema(userConfig: { [k: string]: any } | null) {
 	const baseSchema = {
-		host: {
-			doc: 'The IP address or hostname that NodeCG should bind to.',
-			format: String,
-			default: '0.0.0.0',
-		},
-		port: {
-			doc: 'The port that NodeCG should listen on.',
-			format: 'port',
-			default: 9090,
-		},
-		baseURL: {
-			doc:
+		host: Joi.alternatives()
+			.try(Joi.string().ip(), Joi.string().hostname())
+			.required()
+			.default('0.0.0.0')
+			.description('The IP address or hostname that NodeCG should bind to.'),
+
+		port: Joi.number()
+			.port()
+			.default(9090)
+			.description('The port that NodeCG should listen on.'),
+
+		baseURL: Joi.string()
+			.hostname()
+			.default('')
+			.description(
 				'The URL of this instance. Used for things like cookies. Defaults to HOST:PORT. ' +
-				"If you use a reverse proxy, you'll likely need to set this value.",
-			format: String,
-			default: '',
-		},
-		developer: {
-			doc: 'Deprecated, currently does nothing.',
-			format: Boolean,
-			default: false,
-		},
-		exitOnUncaught: {
-			doc: 'Whether or not to exit on uncaught exceptions.',
-			format: Boolean,
-			default: true,
-		},
-		logging: {
-			replicants: {
-				doc: 'Whether to enable logging of the Replicants subsystem. Very spammy.',
-				format: Boolean,
-				default: false,
-			},
-			console: {
-				enabled: {
-					doc: 'Whether to enable console logging.',
-					format: Boolean,
-					default: true,
-				},
-				level: CONVICT_LOG_LEVEL,
-			},
-			file: {
-				enabled: {
-					doc: 'Whether to enable file logging.',
-					format: Boolean,
-					default: false,
-				},
-				level: CONVICT_LOG_LEVEL,
-				path: {
-					doc: 'The filepath to log to.',
-					type: String,
-					default: 'logs/nodecg.log',
-				},
-			},
-		},
-		bundles: {
-			enabled: {
-				doc: 'A whitelist array of bundle names that will be the only ones loaded at startup.',
-				format(val: unknown) {
-					return VALIDATE_STRING_ARRAY(val) || val === null; // eslint-disable-line new-cap
-				},
-				default: null,
-				arg: 'bundlesEnabled',
-			},
-			disabled: {
-				doc: 'A blacklist array of bundle names that will be excluded from loading at startup.',
-				format(val: unknown) {
-					return VALIDATE_STRING_ARRAY(val) || val === null; // eslint-disable-line new-cap
-				},
-				default: null,
-				arg: 'bundlesDisabled',
-			},
-			paths: {
-				doc: 'An array of additional paths where bundles are located',
-				format(val: unknown) {
-					return VALIDATE_STRING_ARRAY(val); // eslint-disable-line new-cap
-				},
-				default: [],
-				arg: 'bundlesPaths',
-			},
-		},
+					"If you use a reverse proxy, you'll likely need to set this value.",
+			),
+
+		exitOnUncaught: Joi.bool()
+			.default(true)
+			.description('Whether or not to exit on uncaught exceptions.'),
+
+		logging: Joi.object({
+			replicants: Joi.bool()
+				.default(false)
+				.description('Whether to enable logging of the Replicants subsystem. Very spammy.'),
+
+			console: Joi.object({
+				enabled: Joi.bool()
+					.default(true)
+					.description('Whether to enable console logging.'),
+
+				level: Joi.string()
+					.valid(...LOG_LEVELS)
+					.default('info'),
+			}),
+
+			file: Joi.object({
+				enabled: Joi.bool()
+					.default(false)
+					.description('Whether to enable file logging.'),
+
+				level: Joi.string()
+					.valid(...LOG_LEVELS)
+					.default('info'),
+
+				path: Joi.string()
+					.default('logs/nodecg.log')
+					.description('The filepath to log to.'),
+			}),
+		}).required(),
+
+		bundles: Joi.object({
+			enabled: Joi.array()
+				.items(Joi.string())
+				.allow(null)
+				.default(argv.bundlesEnabled ?? null)
+				.description('A whitelist array of bundle names that will be the only ones loaded at startup.'),
+
+			disabled: Joi.array()
+				.items(Joi.string())
+				.allow(null)
+				.default(argv.bundlesDisabled ?? null)
+				.description('A blacklist array of bundle names that will be excluded from loading at startup.'),
+
+			paths: Joi.array()
+				.items(Joi.string())
+				.default(argv.bundlesPaths ?? [])
+				.description('An array of additional paths where bundles are located.'),
+		}),
 	};
 
-	if (!userCfgExists) {
-		return {
-			...baseSchema,
-		};
-	}
-
-	const rawUserConfigFile = fs.readFileSync(userCfgPath, 'utf8');
-	let userConfig;
-	try {
-		userConfig = JSON.parse(rawUserConfigFile);
-	} catch {
-		throw new Error(`Failed to parse ${userCfgPath}. Please ensure that it contains only valid JSON.`);
+	if (!userConfig) {
+		return Joi.object(baseSchema);
 	}
 
 	if (userConfig?.bundles?.enabled && userConfig?.bundles?.disabled) {
@@ -123,167 +93,160 @@ function generateConfigSchema(userCfgPath: string) {
 	}
 
 	const extendedSchema = {
-		login: {
-			enabled: {
-				doc: 'Whether to enable login security.',
-				format: Boolean,
-				default: false,
-			},
-			sessionSecret: {
-				doc: 'The secret used to salt sessions.',
-				format: String,
+		login: Joi.object({
+			enabled: Joi.bool()
+				.default(false)
+				.description('Whether to enable login security.'),
 
+			sessionSecret: Joi.string()
 				// This will throw if the user does not provide a value, but only if login security is enabled.
-				default: userConfig?.login?.enabled ? null : '',
-			},
-			forceHttpsReturn: {
-				doc:
+				.default(userConfig?.login?.enabled ? null : '')
+				.description('The secret used to salt sessions.'),
+
+			forceHttpsReturn: Joi.bool()
+				.default(false)
+				.description(
 					'Forces Steam & Twitch login return URLs to use HTTPS instead of HTTP. Useful in reverse proxy setups.',
-				format: Boolean,
-				default: false,
-			},
-			steam: {
-				enabled: {
-					doc: 'Whether to enable Steam authentication.',
-					format: Boolean,
-					default: false,
-				},
-				apiKey: {
-					doc: 'A Steam API Key. Obtained from http://steamcommunity.com/dev/apikey',
-					format: String,
+				),
 
+			steam: Joi.object({
+				enabled: Joi.bool()
+					.default(false)
+					.description('Whether to enable Steam authentication.'),
+
+				apiKey: Joi.string()
 					// This will throw if the user does not provide a value, but only if Steam auth is enabled.
-					default: userConfig?.login?.steam?.enabled ? null : '',
-				},
-				allowedIds: {
-					doc: 'Which 64 bit Steam IDs to allow. Can be obtained from https://steamid.io/',
-					format: VALIDATE_STRING_ARRAY,
+					.default(userConfig?.login?.steam?.enabled ? null : '')
+					.description('A Steam API Key. Obtained from http://steamcommunity.com/dev/apikey'),
 
+				allowedIds: Joi.array()
+					.items(Joi.string())
 					// This will throw if the user does not provide a value, but only if Steam auth is enabled.
-					default: userConfig?.login?.steam?.enabled ? null : [],
-				},
-			},
-			twitch: {
-				enabled: {
-					doc: 'Whether to enable Twitch authentication.',
-					format: Boolean,
-					default: false,
-				},
-				clientID: {
-					doc: 'A Twitch application ClientID http://twitch.tv/kraken/oauth2/clients/new',
-					format: String,
+					.default(userConfig?.login?.steam?.enabled ? null : [])
+					.description('Which 64 bit Steam IDs to allow. Can be obtained from https://steamid.io/'),
+			}),
 
+			twitch: Joi.object({
+				enabled: Joi.bool()
+					.default(false)
+					.description('Whether to enable Twitch authentication.'),
+
+				clientID: Joi.string()
 					// This will throw if the user does not provide a value, but only if Twitch auth is enabled.
-					default: userConfig?.login?.twitch?.enabled ? null : '',
-				},
-				clientSecret: {
-					doc: 'A Twitch application ClientSecret http://twitch.tv/kraken/oauth2/clients/new',
-					format: String,
+					.default(userConfig?.login?.twitch?.enabled ? null : '')
+					.description('A Twitch application ClientID http://twitch.tv/kraken/oauth2/clients/new'),
 
+				clientSecret: Joi.string()
 					// This will throw if the user does not provide a value, but only if Twitch auth is enabled.
-					default: userConfig?.login?.twitch?.enabled ? null : '',
-				},
-				scope: {
-					doc: 'A space-separated string of Twitch application permissions.',
-					format: String,
-					default: 'user_read',
-				},
-				allowedUsernames: {
-					doc: 'Which Twitch usernames to allow.',
-					format: VALIDATE_STRING_ARRAY,
+					.default(userConfig?.login?.twitch?.enabled ? null : '')
+					.description('A Twitch application ClientSecret http://twitch.tv/kraken/oauth2/clients/new'),
 
+				scope: Joi.string()
+					.default('user_read')
+					.description('A space-separated string of Twitch application permissions.'),
+
+				allowedUsernames: Joi.array()
+					.items(Joi.string())
 					// This will throw if the user does not provide a value, but only if Twitch auth is enabled.
-					default: userConfig?.login?.twitch?.enabled ? null : [],
-				},
-			},
-			local: {
-				enabled: {
-					doc: 'Enable Local authentication.',
-					format: Boolean,
-					default: false,
-				},
-				allowedUsers: {
-					doc: 'Which users can log in.',
-					format: VALIDATE_STRING_ARRAY,
+					.default(userConfig?.login?.twitch?.enabled ? null : [])
+					.description('Which Twitch usernames to allow.'),
+			}),
 
+			local: Joi.object({
+				enabled: Joi.bool()
+					.default(false)
+					.description('Enable Local authentication.'),
+
+				allowedUsers: Joi.array()
+					.items(
+						Joi.object({
+							username: Joi.string(),
+							password: Joi.string(),
+						}),
+					)
 					// This will throw if the user does not provide a value, but only if Local auth is enabled.
-					default: userConfig?.login?.local?.enabled ? null : [],
-				},
-			},
-		},
-		ssl: {
-			enabled: {
-				doc: 'Whether to enable SSL/HTTPS encryption.',
-				format: Boolean,
-				default: false,
-			},
-			allowHTTP: {
-				doc: 'Whether to allow insecure HTTP connections while SSL is active.',
-				format: Boolean,
-				default: false,
-			},
-			keyPath: {
-				doc: 'The path to an SSL key file.',
-				format: String,
+					.default(userConfig?.login?.local?.enabled ? null : [])
+					.description('Which users can log in.'),
+			}),
+		}),
 
+		ssl: Joi.object({
+			enabled: Joi.bool()
+				.default(false)
+				.description('Whether to enable SSL/HTTPS encryption.'),
+
+			allowHTTP: Joi.bool()
+				.default(false)
+				.description('Whether to allow insecure HTTP connections while SSL is active.'),
+
+			keyPath: Joi.string()
 				// This will throw if the user does not provide a value, but only if SSL is enabled.
-				default: userConfig?.ssl?.enabled ? null : '',
-			},
-			certificatePath: {
-				doc: 'The path to an SSL certificate file.',
-				format: String,
+				.default(userConfig?.ssl?.enabled ? null : '')
+				.description('The path to an SSL key file.'),
 
+			certificatePath: Joi.string()
 				// This will throw if the user does not provide a value, but only if SSL is enabled.
-				default: userConfig?.ssl?.enabled ? null : '',
-			},
-			passphrase: {
-				doc: 'The passphrase for the provided key file.',
-				format: String,
-				default: '',
-			},
-		},
-		sentry: {
-			enabled: {
-				doc: 'Whether to enable Sentry error reporting.',
-				format: Boolean,
-				default: false,
-			},
-			dsn: {
-				doc: "Your project's DSN, used to route alerts to the correct place.",
-				format: String,
+				.default(userConfig?.ssl?.enabled ? null : '')
+				.description('The path to an SSL certificate file.'),
 
+			passphrase: Joi.string()
+				.default('')
+				.description('The passphrase for the provided key file.'),
+		}),
+
+		sentry: Joi.object({
+			enabled: Joi.bool()
+				.default(false)
+				.description('Whether to enable Sentry error reporting.'),
+
+			dsn: Joi.string()
 				// This will throw if the user does not provide a value, but only if Sentry is enabled.
-				default: userConfig?.sentry?.enabled ? null : '',
-			},
-		},
+				.default(userConfig?.sentry?.enabled ? null : '')
+				.description("Your project's DSN, used to route alerts to the correct place."),
+		}),
 	};
 
-	return { ...baseSchema, ...extendedSchema };
+	return Joi.object({ ...baseSchema, ...extendedSchema });
 }
 
 // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
-export default function(userCfgPath: string) {
-	const convictSchema = generateConfigSchema(userCfgPath);
-
-	// Load user config if it exists, and merge it
-	const userCfgExists = fs.existsSync(userCfgPath);
-	const convictConfig = convict(convictSchema);
-	if (userCfgExists) {
-		convictConfig.loadFile(userCfgPath);
-	} else {
+export default function(cfgDir: string) {
+	const cc = cosmiconfig('nodecg', {
+		searchPlaces: ['nodecg.json', 'nodecg.yaml', 'nodecg.yml', 'nodecg.js', 'nodecg.config.js'],
+		stopDir: cfgDir,
+	});
+	const result = cc.search(cfgDir);
+	const userCfg = result?.config;
+	if (!userCfg) {
 		console.info('[nodecg] No config found, using defaults.');
 	}
 
-	convictConfig.validate({ allowed: 'strict' });
-	const config = convictConfig.getProperties();
+	const schema = getConfigSchema(userCfg);
+	const validationResult = schema.validate(userCfg);
+	if (validationResult.error) {
+		console.error('[nodecg] Config invalid:\n', validationResult.error.annotate());
+		return process.exit(1);
+	}
 
-	config.baseURL = config.baseURL || `${config.host === '0.0.0.0' ? 'localhost' : config.host}:${config.port}`;
+	type Fuck = Joi.extractType<typeof schema>;
+	const config: Fuck = validationResult.value;
+	if (!config) {
+		console.error('[nodecg] config unexpectedly undefined. This is a bug with NodeCG, not your config.');
+		return process.exit(1);
+	}
+
+	config.baseURL =
+		config.baseURL ?? `${config.host === '0.0.0.0' ? 'localhost' : String(config.host)}:${String(config.port)}`;
 
 	// Create the filtered config
-	const filteredConfig = {
+	type FilteredConfig = SetOptional<
+		Pick<typeof config, 'host' | 'port' | 'baseURL' | 'logging' | 'sentry' | 'login' | 'ssl'>,
+		'login' | 'ssl'
+	>;
+
+	const filteredConfig: FilteredConfig = {
 		host: config.host,
 		port: config.port,
-		developer: config.developer,
 		baseURL: config.baseURL,
 		logging: {
 			replicants: config.logging.replicants,
@@ -304,13 +267,13 @@ export default function(userCfgPath: string) {
 			enabled: config.login.enabled,
 		};
 
-		if (config.login.steam) {
+		if ('steam' in config.login) {
 			filteredConfig.login.steam = {
 				enabled: config.login.steam.enabled,
 			};
 		}
 
-		if (config.login.twitch) {
+		if ('twitch' in config.login) {
 			filteredConfig.login.twitch = {
 				enabled: config.login.twitch.enabled,
 				clientID: config.login.twitch.clientID,
@@ -318,14 +281,14 @@ export default function(userCfgPath: string) {
 			};
 		}
 
-		if (config.login.local) {
+		if ('local' in config.login) {
 			filteredConfig.login.local = {
 				enabled: config.login.local.enabled,
 			};
 		}
 	}
 
-	if (config.ssl) {
+	if ('ssl' in config) {
 		filteredConfig.ssl = {
 			enabled: config.ssl.enabled,
 		};

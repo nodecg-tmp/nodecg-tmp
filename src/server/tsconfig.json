@@ -6,5 +6,10 @@
 		"module": "commonjs",
 		"allowJs": false
 	},
-	"include": ["./**/*", "../types/**/*.d.ts", "../shared/replicants.shared.ts"]
+	"include": [
+		"./**/*",
+		"../types/**/*.d.ts",
+		"../shared/replicants.shared.ts",
+		"../../node_modules/joi-extract-type/dist/index.d.ts"
+	]
 }

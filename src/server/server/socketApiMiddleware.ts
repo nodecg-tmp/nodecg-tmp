@@ -4,12 +4,16 @@ import * as Sentry from '@sentry/node';
 
 // Ours
 import createLogger from '../logger';
+import { TypedServerSocket } from '../../types/socket-protocol';
 
 const log = createLogger('nodecg/lib/server');
 
-export default async function(socket: SocketIO.Socket, next: SocketIO.NextFunction): Promise<void> {
+export default async function(socket: TypedServerSocket, next: SocketIO.NextFunction): Promise<void> {
 	try {
-		log.trace('New socket connection: ID %s with IP %s', socket.id, socket.handshake.address);
+		log.trace('New socket connection: ID %s with IP %s', socket.id, (socket as any).handshake.address);
+
+		// Prevent console warnings when many extensions are installed
+		(socket as any).setMaxListeners(64);
 
 		socket.on('error', err => {
 			if (global.sentryEnabled) {
@@ -20,8 +24,14 @@ export default async function(socket: SocketIO.Socket, next: SocketIO.NextFuncti
 		});
 
 		socket.on('message', data => {
-			log.debug('Socket %s sent a message:', socket.id, data);
-			socket.broadcast.emit('message', data);
+			log.trace(
+				'Received message %s (sent to bundle %s) with data:',
+				data.messageName,
+				data.bundleName,
+				data.content,
+			);
+
+			(socket as any).broadcast.emit('message', data);
 		});
 
 		socket.on('joinRoom', (room, cb) => {

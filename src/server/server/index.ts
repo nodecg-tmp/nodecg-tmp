@@ -60,7 +60,7 @@ import MountsLib from '../mounts';
 import SoundsLib from '../sounds';
 import AssetManager from '../assets';
 import SharedSourcesLib from '../shared-sources';
-import * as extensionApi from './extensions';
+import ExtensionManager from './extensions';
 
 const renderTemplate = memoize((content, options) => {
 	return template(content)(options);
@@ -76,6 +76,8 @@ export default class NodeCGServer extends EventEmitter {
 	private readonly _server: Server;
 
 	private _replicator: Replicator;
+
+	private _extensionManager: ExtensionManager;
 
 	constructor() {
 		super();
@@ -249,7 +251,8 @@ export default class NodeCGServer extends EventEmitter {
 		bundleEvents.on('bundleRemoved', updateBundlesReplicant);
 		updateBundlesReplicant();
 
-		extensionApi.init();
+		const extensionManager = new ExtensionManager(io, replicator, this.mount);
+		this._extensionManager = extensionManager;
 		this.emit('extensionsLoaded');
 
 		// We intentionally wait until all bundles and extensions are loaded before starting the server.
@@ -307,7 +310,7 @@ export default class NodeCGServer extends EventEmitter {
 	}
 
 	getExtensions(): { [k: string]: unknown } {
-		return extensionApi.getExtensions();
+		return this._extensionManager.getExtensions();
 	}
 
 	getSocketIOServer(): TypedServer {

@@ -6,7 +6,7 @@ import configHelper from '../config';
 import loggerFactory from './logger.server';
 import { LoggerInterface } from '../../shared/logger-interface';
 
-let Logger: new (name: string) => LoggerInterface;
+export let Logger: new (name: string) => LoggerInterface;
 if (configHelper.config.sentry.enabled) {
 	Logger = loggerFactory(configHelper.config.logging, Sentry);
 } else {

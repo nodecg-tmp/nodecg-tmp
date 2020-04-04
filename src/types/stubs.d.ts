@@ -8,3 +8,5 @@ declare module 'make-fetch-happen';
 declare module 'json-schema-lib';
 declare module 'json-schema-lib/lib/util/typeOf';
 declare module 'json-schema-lib/lib/util/stripHash';
+
+declare module 'is-error';

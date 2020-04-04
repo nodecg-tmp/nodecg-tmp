@@ -42,6 +42,11 @@ export interface ProtocolDefinition extends ServerDefinition {
 					revision: number;
 					operations: Array<ReplicantOperation<any>>;
 				};
+				message: {
+					messageName: string;
+					bundleName: string;
+					content: unknown;
+				};
 			};
 			// messages clients can send to the server, with a typed response
 			ClientRPCs: {
@@ -132,6 +137,15 @@ export interface ProtocolDefinition extends ServerDefinition {
 					};
 					response: any;
 					error: string;
+				};
+				message: {
+					request: {
+						messageName: string;
+						bundleName: string;
+						content: unknown;
+					};
+					response: unknown;
+					error: void;
 				};
 			};
 			// messages clients can send to the server (without a response)

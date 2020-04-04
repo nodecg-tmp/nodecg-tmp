@@ -1,3 +1,4 @@
 declare module 'json-schema-defaults' {
-	export = (schema: object): {[k: string]: any}
+	function jsonSchemaDefaults(schema: object): { [k: string]: any };
+	export = jsonSchemaDefaults;
 }
