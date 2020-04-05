@@ -167,4 +167,42 @@ declare namespace NodeCG {
 	export interface SocketEvents extends SocketIOConnectionEvents {
 		foo: (bar: number) => void;
 	}
+
+	export type FilteredConfig = {
+		host: string;
+		port: number;
+		baseURL: string;
+		logging: {
+			replicants: boolean;
+			console: {
+				enabled: boolean;
+				level: string;
+			};
+			file: {
+				enabled: boolean;
+				level: string;
+			};
+		};
+		sentry: {
+			enabled: boolean;
+			dsn: string;
+		};
+		login?: {
+			enabled: boolean;
+			steam?: {
+				enabled: boolean;
+			};
+			twitch?: {
+				enabled: boolean;
+				clientID?: string;
+				scope: string;
+			};
+			local?: {
+				enabled: boolean;
+			};
+		};
+		ssl?: {
+			enabled: boolean;
+		};
+	};
 }

@@ -10,5 +10,5 @@
 		// TODO: remove once rewrite is done
 		"allowJs": true
 	},
-	"include": ["./**/*.ts", "./**/*.js", "../../shared/api.base.ts"]
+	"include": ["./**/*.ts", "./**/*.js", "../types/**/*.d.ts", "../../shared/api.base.ts"]
 }

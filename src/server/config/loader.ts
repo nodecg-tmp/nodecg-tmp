@@ -212,43 +212,7 @@ export default function(cfgDir: string) {
 		config.baseURL || `${config.host === '0.0.0.0' ? 'localhost' : String(config.host)}:${String(config.port)}`;
 
 	// Create the filtered config
-	const filteredConfig: {
-		host: string;
-		port: number;
-		baseURL: string;
-		logging: {
-			replicants: boolean;
-			console: {
-				enabled: boolean;
-				level: string;
-			};
-			file: {
-				enabled: boolean;
-				level: string;
-			};
-		};
-		sentry: {
-			enabled: boolean;
-			dsn: string;
-		};
-		login?: {
-			enabled: boolean;
-			steam?: {
-				enabled: boolean;
-			};
-			twitch?: {
-				enabled: boolean;
-				clientID?: string;
-				scope: string;
-			};
-			local?: {
-				enabled: boolean;
-			};
-		};
-		ssl?: {
-			enabled: boolean;
-		};
-	} = {
+	const filteredConfig: NodeCG.FilteredConfig = {
 		host: config.host,
 		port: config.port,
 		baseURL: config.baseURL,

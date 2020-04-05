@@ -1,11 +1,12 @@
-/* eslint-env browser */
-/* global NodeCG */
-'use strict';
+// Packages
+import equal from 'deep-equal';
+import clone from 'clone';
 
-const EventEmitter = require('events');
-const equal = require('deep-equal');
-const clone = require('clone');
-const shared = require('../../shared/replicants.shared');
+// Ours
+import { NodeCGAPIBase, AbstractLogger } from '../../shared/api.base';
+import * as shared from '../../shared/replicants.shared';
+import { Logger } from './logger';
+
 const declaredReplicants = {};
 
 const REPLICANT_HANDLER = {
@@ -21,7 +22,7 @@ const REPLICANT_HANDLER = {
 	},
 
 	set(target, prop, newValue) {
-		if (prop !== 'value' || isIgnoringProxy(target)) {
+		if (prop !== 'value' || shared.isIgnoringProxy(target)) {
 			target[prop] = newValue;
 			return true;
 		}
@@ -40,8 +41,25 @@ const REPLICANT_HANDLER = {
 	},
 };
 
-class Replicant extends EventEmitter {
-	constructor(name, namespace, opts, socket) {
+class Replicant extends NodeCGAPIBase {
+	get Logger(): new (name: string) => AbstractLogger {
+		return Logger;
+	}
+
+	get log(): AbstractLogger {
+		if (this._memoizedLogger) {
+			return this._memoizedLogger;
+		}
+
+		this._memoizedLogger = new Logger(this.bundleName);
+		return this._memoizedLogger;
+	}
+
+	get config(): typeof filteredConfig {
+		return JSON.parse(JSON.stringify(filteredConfig));
+	}
+
+	constructor(name: string, namespace: string, opts, socket) {
 		if (!name || typeof name !== 'string') {
 			throw new Error('Must supply a name when instantiating a Replicant');
 		}

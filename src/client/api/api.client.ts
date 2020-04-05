@@ -1,9 +1,7 @@
-console.log('in client api file');
-
 // Ours
 import { NodeCGAPIBase } from '../../shared/api.base';
+import { Replicant } from './replicant';
 
-const Replicant = require('./replicant');
 const Logger = require('./logger');
 const { filteredConfig } = require('./config');
 
@@ -342,5 +340,4 @@ function _updateInstanceVolumes(ctx) {
 	});
 }
 
-console.log('adding to window', NodeCGAPIClient);
 window.NodeCG = NodeCGAPIClient;
