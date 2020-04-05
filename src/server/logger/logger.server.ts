@@ -96,23 +96,23 @@ export default function(initialOpts: LoggerOptions, sentry?: typeof Sentry) {
 		}
 
 		trace(...args: any[]): void {
-			mainLogger.verbose(`[${this.name}]`, ...args);
+			mainLogger.verbose(`[${this.name}]`, format(args[0], ...args.slice(1)));
 		}
 
 		debug(...args: any[]): void {
-			mainLogger.debug(`[${this.name}]`, ...args);
+			mainLogger.debug(`[${this.name}]`, format(args[0], ...args.slice(1)));
 		}
 
 		info(...args: any[]): void {
-			mainLogger.info(`[${this.name}]`, ...args);
+			mainLogger.info(`[${this.name}]`, format(args[0], ...args.slice(1)));
 		}
 
 		warn(...args: any[]): void {
-			mainLogger.warn(`[${this.name}]`, ...args);
+			mainLogger.warn(`[${this.name}]`, format(args[0], ...args.slice(1)));
 		}
 
 		error(...args: any[]): void {
-			mainLogger.error(`[${this.name}]`, ...args);
+			mainLogger.error(`[${this.name}]`, format(args[0], ...args.slice(1)));
 
 			if (sentry) {
 				const formattedArgs = args.map(argument => {
@@ -132,7 +132,7 @@ export default function(initialOpts: LoggerOptions, sentry?: typeof Sentry) {
 				return;
 			}
 
-			mainLogger.info(`[${this.name}]`, ...args.slice(1));
+			mainLogger.info(`[${this.name}]`, format(args[0], ...args.slice(1)));
 		}
 	}
 

@@ -1,3 +1,5 @@
+console.log('in client api file');
+
 // Ours
 import { NodeCGAPIBase } from '../../shared/api.base';
 
@@ -340,4 +342,5 @@ function _updateInstanceVolumes(ctx) {
 	});
 }
 
+console.log('adding to window', NodeCGAPIClient);
 window.NodeCG = NodeCGAPIClient;

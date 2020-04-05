@@ -209,7 +209,7 @@ export default function(cfgDir: string) {
 	}
 
 	config.baseURL =
-		config.baseURL ?? `${config.host === '0.0.0.0' ? 'localhost' : String(config.host)}:${String(config.port)}`;
+		config.baseURL || `${config.host === '0.0.0.0' ? 'localhost' : String(config.host)}:${String(config.port)}`;
 
 	// Create the filtered config
 	const filteredConfig: {

@@ -2,10 +2,13 @@
 	"extends": "../../tsconfig_base.json",
 	"compilerOptions": {
 		"noEmit": true,
-		"target": "ESNext",
+		"target": "es2019",
 		"module": "ESNext",
 		"esModuleInterop": false,
-		"allowSyntheticDefaultImports": true
+		"allowSyntheticDefaultImports": true,
+
+		// TODO: remove once rewrite is done
+		"allowJs": true
 	},
 	"include": ["./**/*.ts", "./**/*.js", "../../shared/api.base.ts"]
 }

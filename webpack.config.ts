@@ -1,5 +1,6 @@
 import path from 'path';
 import webpack from 'webpack';
+import CopyPlugin from 'copy-webpack-plugin';
 
 const isDev = process.env.NODE_ENV !== 'production';
 
@@ -34,7 +35,16 @@ const config: webpack.Configuration = {
 			{ test: /\.js$/, loader: 'babel-loader' },
 		],
 	},
-	plugins: [new webpack.EnvironmentPlugin(['BROWSER'])],
+	plugins: [
+		new webpack.EnvironmentPlugin({
+			BROWSER: true,
+		}),
+		new CopyPlugin([
+			'src/client/manifest.json',
+			'src/client/favicon.ico',
+			{ from: 'src/client/dashboard/img/', to: 'dashboard/img', toType: 'dir' },
+		]),
+	],
 };
 
 export default config;

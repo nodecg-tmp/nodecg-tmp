@@ -5,12 +5,13 @@ import path from 'path';
 // Packages
 import clone from 'clone';
 import express from 'express';
+import appRootPath from 'app-root-path';
 
 // Ours
-import * as bundles from './bundle-manager';
-import { config, filteredConfig } from './config';
-import createLogger from './logger';
-import * as ncgUtils from './util';
+import * as bundles from '../bundle-manager';
+import { config, filteredConfig } from '../config';
+import createLogger from '../logger';
+import * as ncgUtils from '../util';
 
 type DashboardContext = {
 	bundles: NodeCG.Bundle[];
@@ -28,7 +29,8 @@ type Workspace = {
 
 const log = createLogger('nodecg/lib/dashboard');
 const INSTRUMENTED_PATH = path.join(__dirname, '../instrumented');
-const BUILD_PATH = path.join(__dirname, '../build/client');
+const BUILD_PATH = path.join(appRootPath.path, 'build/client');
+const VIEWS_PATH = path.join(appRootPath.path, 'src/server/dashboard');
 
 export default class DashboardLib {
 	app = express();
@@ -38,7 +40,11 @@ export default class DashboardLib {
 	constructor() {
 		const { app } = this;
 
-		app.use('/node_modules', express.static(path.resolve(__dirname, '../node_modules')));
+		app.set('views', VIEWS_PATH);
+
+		app.use(express.static(BUILD_PATH));
+
+		app.use('/node_modules', express.static(path.join(appRootPath.path, 'node_modules')));
 
 		app.get('/', (_, res) => res.redirect('/dashboard/'));
 
@@ -51,7 +57,7 @@ export default class DashboardLib {
 				this.dashboardContext = getDashboardContext();
 			}
 
-			res.render(path.join(__dirname, '../client/dashboard/dashboard.tmpl'), this.dashboardContext);
+			res.render(path.join(VIEWS_PATH, 'dashboard.tmpl'), this.dashboardContext);
 		});
 
 		app.get('/nodecg-api.min.js', (_, res) => {
