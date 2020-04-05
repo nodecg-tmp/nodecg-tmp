@@ -47,7 +47,7 @@ if (config?.login?.steam?.enabled) {
 			) => {
 				try {
 					const roles: Role[] = [];
-					const allowed = config.login?.steam?.allowedIds.includes(profile.id);
+					const allowed = config.login?.steam?.allowedIds?.includes(profile.id);
 					if (allowed) {
 						log.info('Granting %s (%s) access', profile.id, profile.displayName);
 						roles.push(await getSuperUserRole());
@@ -97,7 +97,7 @@ if (config?.login?.twitch?.enabled) {
 			) => {
 				try {
 					const roles: Role[] = [];
-					const allowed = config.login?.twitch?.allowedUsernames.includes(profile.username);
+					const allowed = config.login?.twitch?.allowedUsernames?.includes(profile.username);
 					if (allowed) {
 						log.info('Granting %s access', profile.username);
 						roles.push(await getSuperUserRole());
@@ -137,7 +137,7 @@ if (config.login?.local?.enabled) {
 			async (username: string, password: string, done: StrategyDoneCb) => {
 				try {
 					const roles: Role[] = [];
-					const foundUser = allowedUsers.find(u => u.username === username);
+					const foundUser = allowedUsers?.find(u => u.username === username);
 					let allowed = false;
 
 					if (foundUser) {
@@ -148,7 +148,7 @@ if (config.login?.local?.enabled) {
 						if (match && hashes.includes(match[1])) {
 							expected = match[2];
 							actual = crypto
-								.createHmac(match[1], sessionSecret)
+								.createHmac(match[1], sessionSecret!)
 								.update(actual, 'utf8')
 								.digest('hex');
 						}

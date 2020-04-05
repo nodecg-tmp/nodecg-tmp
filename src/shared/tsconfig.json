@@ -2,11 +2,9 @@
 	"extends": "../../tsconfig_base.json",
 	"compilerOptions": {
 		"rootDir": ".",
-		"outDir": "../../build/shared-type-emit",
+		"outDir": "../../build/shared",
 		"module": "commonjs",
-		"allowJs": false,
-		"composite": true,
-		"emitDeclarationOnly": true
+		"composite": true
 	},
 	"include": ["./**/*", "../types/**/*"]
 }

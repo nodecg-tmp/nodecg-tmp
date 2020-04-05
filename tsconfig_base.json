@@ -10,7 +10,6 @@
 		"resolveJsonModule": true,
 
 		// Type checking
-		"allowJs": true, // TODO: remove this when done migrating
 		"alwaysStrict": true,
 		"forceConsistentCasingInFileNames": true,
 		"noFallthroughCasesInSwitch": true,

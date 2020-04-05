@@ -1,4 +1,5 @@
 // Ours
+// @ts-ignore
 const { version } = require('../../package.json');
 import { AbstractReplicant, Options } from './replicants.shared';
 

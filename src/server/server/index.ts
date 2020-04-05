@@ -3,7 +3,7 @@ import * as os from 'os';
 import * as Sentry from '@sentry/node';
 import { config, filteredConfig } from '../config';
 import '../util/sentry-config';
-const pjson = require('../../package.json'); // eslint-disable-line @typescript-eslint/no-var-requires
+import { pjson } from '../util';
 
 global.exitOnUncaught = config.exitOnUncaught;
 if (config.sentry && config.sentry.enabled) {
@@ -103,8 +103,8 @@ export default class NodeCGServer extends EventEmitter {
 		let server: Server;
 		if (config.ssl && config.ssl.enabled) {
 			const sslOpts: { key: Buffer; cert: Buffer; passphrase?: string } = {
-				key: fs.readFileSync(config.ssl.keyPath),
-				cert: fs.readFileSync(config.ssl.certificatePath),
+				key: fs.readFileSync(config.ssl.keyPath!),
+				cert: fs.readFileSync(config.ssl.certificatePath!),
 			};
 			if (config.ssl.passphrase) {
 				sslOpts.passphrase = config.ssl.passphrase;

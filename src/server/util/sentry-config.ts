@@ -9,8 +9,7 @@ import express from 'express';
 // Ours
 import { config } from '../config';
 import bundleManager, { all as getAllBundles } from '../bundle-manager';
-import { authCheck } from '../util';
-const pjson = require('../../package.json'); // eslint-disable-line @typescript-eslint/no-var-requires
+import { authCheck, pjson } from '../util';
 
 export const bundleMetadata: Array<{ name: string; git: NodeCG.Bundle.GitData; version: string }> = [];
 export const app = express();
@@ -20,7 +19,6 @@ const baseSentryConfig = {
 	release: pjson.version,
 };
 
-// When the bundle manager first loads up the bundles, a
 bundleManager.on('init', () => {
 	Sentry.configureScope(scope => {
 		getAllBundles().forEach(bundle => {

@@ -11,9 +11,7 @@ import { LogLevel } from '../../shared/logger-interface';
 // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
 function getConfigSchema(userConfig: { [k: string]: any } | null) {
 	return Joi.object({
-		host: Joi.alternatives()
-			.try(Joi.string().ip(), Joi.string().hostname())
-			.required()
+		host: Joi.string()
 			.default('0.0.0.0')
 			.description('The IP address or hostname that NodeCG should bind to.'),
 
@@ -32,20 +30,17 @@ function getConfigSchema(userConfig: { [k: string]: any } | null) {
 
 		exitOnUncaught: Joi.boolean()
 			.default(true)
-			.description('Whether or not to exit on uncaught exceptions.')
-			.required(),
+			.description('Whether or not to exit on uncaught exceptions.'),
 
 		logging: Joi.object({
 			replicants: Joi.boolean()
 				.default(false)
-				.description('Whether to enable logging of the Replicants subsystem. Very spammy.')
-				.required(),
+				.description('Whether to enable logging of the Replicants subsystem. Very spammy.'),
 
 			console: Joi.object({
 				enabled: Joi.boolean()
 					.default(true)
-					.description('Whether to enable console logging.')
-					.required(),
+					.description('Whether to enable console logging.'),
 
 				level: Joi.string()
 					.valid(...Object.values(LogLevel))
@@ -55,9 +50,7 @@ function getConfigSchema(userConfig: { [k: string]: any } | null) {
 			file: Joi.object({
 				enabled: Joi.boolean()
 					.default(false)
-					.description('Whether to enable file logging.')
-					.required(),
-
+					.description('Whether to enable file logging.'),
 				level: Joi.string()
 					.valid(...Object.values(LogLevel))
 					.default('info'),
@@ -90,60 +83,43 @@ function getConfigSchema(userConfig: { [k: string]: any } | null) {
 		login: Joi.object({
 			enabled: Joi.boolean()
 				.default(false)
-				.description('Whether to enable login security.')
-				.required(),
-
+				.description('Whether to enable login security.'),
 			sessionSecret: Joi.string()
 				// This will throw if the user does not provide a value, but only if login security is enabled.
 				.default(userConfig?.login?.enabled ? null : '')
-				.description('The secret used to salt sessions.')
-				.required(),
-
+				.description('The secret used to salt sessions.'),
 			forceHttpsReturn: Joi.boolean()
 				.default(false)
 				.description(
 					'Forces Steam & Twitch login return URLs to use HTTPS instead of HTTP. Useful in reverse proxy setups.',
-				)
-				.required(),
-
+				),
 			steam: Joi.object({
 				enabled: Joi.boolean()
 					.default(false)
-					.description('Whether to enable Steam authentication.')
-					.required(),
-
+					.description('Whether to enable Steam authentication.'),
 				apiKey: Joi.string()
 					// This will throw if the user does not provide a value, but only if Steam auth is enabled.
 					.default(userConfig?.login?.steam?.enabled ? null : '')
-					.description('A Steam API Key. Obtained from http://steamcommunity.com/dev/apikey')
-					.required(),
-
+					.description('A Steam API Key. Obtained from http://steamcommunity.com/dev/apikey'),
 				allowedIds: Joi.array()
 					.items(Joi.string())
 					// This will throw if the user does not provide a value, but only if Steam auth is enabled.
 					.default(userConfig?.login?.steam?.enabled ? null : [])
-					.description('Which 64 bit Steam IDs to allow. Can be obtained from https://steamid.io/')
-					.required(),
+					.description('Which 64 bit Steam IDs to allow. Can be obtained from https://steamid.io/'),
 			}),
 
 			twitch: Joi.object({
 				enabled: Joi.boolean()
 					.default(false)
-					.description('Whether to enable Twitch authentication.')
-					.required(),
-
+					.description('Whether to enable Twitch authentication.'),
 				clientID: Joi.string()
 					// This will throw if the user does not provide a value, but only if Twitch auth is enabled.
 					.default(userConfig?.login?.twitch?.enabled ? null : '')
-					.description('A Twitch application ClientID http://twitch.tv/kraken/oauth2/clients/new')
-					.required(),
-
+					.description('A Twitch application ClientID http://twitch.tv/kraken/oauth2/clients/new'),
 				clientSecret: Joi.string()
 					// This will throw if the user does not provide a value, but only if Twitch auth is enabled.
 					.default(userConfig?.login?.twitch?.enabled ? null : '')
-					.description('A Twitch application ClientSecret http://twitch.tv/kraken/oauth2/clients/new')
-					.required(),
-
+					.description('A Twitch application ClientSecret http://twitch.tv/kraken/oauth2/clients/new'),
 				scope: Joi.string()
 					.default('user_read')
 					.description('A space-separated string of Twitch application permissions.'),
@@ -152,16 +128,13 @@ function getConfigSchema(userConfig: { [k: string]: any } | null) {
 					.items(Joi.string())
 					// This will throw if the user does not provide a value, but only if Twitch auth is enabled.
 					.default(userConfig?.login?.twitch?.enabled ? null : [])
-					.description('Which Twitch usernames to allow.')
-					.required(),
+					.description('Which Twitch usernames to allow.'),
 			}),
 
 			local: Joi.object({
 				enabled: Joi.boolean()
 					.default(false)
-					.description('Enable Local authentication.')
-					.required(),
-
+					.description('Enable Local authentication.'),
 				allowedUsers: Joi.array()
 					.items(
 						Joi.object({
@@ -171,34 +144,25 @@ function getConfigSchema(userConfig: { [k: string]: any } | null) {
 					)
 					// This will throw if the user does not provide a value, but only if Local auth is enabled.
 					.default(userConfig?.login?.local?.enabled ? null : [])
-					.description('Which users can log in.')
-					.required(),
+					.description('Which users can log in.'),
 			}),
 		}).optional(),
 
 		ssl: Joi.object({
 			enabled: Joi.boolean()
 				.default(false)
-				.description('Whether to enable SSL/HTTPS encryption.')
-				.required(),
-
+				.description('Whether to enable SSL/HTTPS encryption.'),
 			allowHTTP: Joi.boolean()
 				.default(false)
-				.description('Whether to allow insecure HTTP connections while SSL is active.')
-				.required(),
-
+				.description('Whether to allow insecure HTTP connections while SSL is active.'),
 			keyPath: Joi.string()
 				// This will throw if the user does not provide a value, but only if SSL is enabled.
 				.default(userConfig?.ssl?.enabled ? null : '')
-				.description('The path to an SSL key file.')
-				.required(),
-
+				.description('The path to an SSL key file.'),
 			certificatePath: Joi.string()
 				// This will throw if the user does not provide a value, but only if SSL is enabled.
 				.default(userConfig?.ssl?.enabled ? null : '')
-				.description('The path to an SSL certificate file.')
-				.required(),
-
+				.description('The path to an SSL certificate file.'),
 			passphrase: Joi.string()
 				.default('')
 				.description('The passphrase for the provided key file.'),
@@ -207,9 +171,7 @@ function getConfigSchema(userConfig: { [k: string]: any } | null) {
 		sentry: Joi.object({
 			enabled: Joi.boolean()
 				.default(false)
-				.description('Whether to enable Sentry error reporting.')
-				.required(),
-
+				.description('Whether to enable Sentry error reporting.'),
 			dsn: Joi.string()
 				// This will throw if the user does not provide a value, but only if Sentry is enabled.
 				.default(userConfig?.sentry?.enabled ? null : '')
@@ -240,8 +202,7 @@ export default function(cfgDir: string) {
 		return process.exit(1);
 	}
 
-	type Fuck = Joi.extractType<typeof schema>;
-	const config: Fuck = validationResult.value;
+	const config: Joi.extractType<typeof schema> = validationResult.value;
 	if (!config) {
 		console.error('[nodecg] config unexpectedly undefined. This is a bug with NodeCG, not your config.');
 		return process.exit(1);
@@ -277,7 +238,7 @@ export default function(cfgDir: string) {
 			};
 			twitch?: {
 				enabled: boolean;
-				clientID: string;
+				clientID?: string;
 				scope: string;
 			};
 			local?: {

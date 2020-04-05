@@ -15,13 +15,6 @@ import semver from 'semver';
 import exitHook from 'exit-hook';
 import fetch from 'make-fetch-happen';
 
-// Ours
-const pjson = require('../../package.json'); // eslint-disable-line @typescript-eslint/no-var-requires
-import NodeCGServer from './server';
-
-process.title = 'NodeCG';
-global.exitOnUncaught = true;
-
 const cwd = process.cwd();
 if (cwd !== appRootPath.path) {
 	console.warn('[nodecg] process.cwd is %s, expected %s', cwd, appRootPath.path);
@@ -30,8 +23,16 @@ if (cwd !== appRootPath.path) {
 }
 
 if (!process.env.NODECG_ROOT) {
+	// This must happen before we import any of our other application code.
 	process.env.NODECG_ROOT = process.cwd();
 }
+
+// Ours
+import { pjson } from './util';
+import NodeCGServer from './server';
+
+process.title = 'NodeCG';
+global.exitOnUncaught = true;
 
 const nodeVersion = process.versions.node;
 process.title += ` - ${String(pjson.version)}`;
@@ -70,6 +71,12 @@ server.on('stopped', () => {
 	if (!process.exitCode) {
 		process.exit(0);
 	}
+});
+server.start().catch(error => {
+	console.error(error);
+	process.nextTick(() => {
+		process.exit(1);
+	});
 });
 
 exitHook(() => {
