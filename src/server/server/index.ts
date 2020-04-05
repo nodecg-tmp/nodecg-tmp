@@ -69,7 +69,7 @@ const renderTemplate = memoize((content, options) => {
 export default class NodeCGServer extends EventEmitter {
 	readonly log = createLogger('server');
 
-	private readonly _io = SocketIO() as TypedServer;
+	private readonly _io: TypedServer;
 
 	private readonly _app = express();
 
@@ -81,20 +81,6 @@ export default class NodeCGServer extends EventEmitter {
 
 	constructor() {
 		super();
-
-		/**
-		 * Socket.IO server setup.
-		 * We cast to "any" for a few things because
-		 * typed-socket.io isn't quite perfect.
-		 */
-		(this._io as any).on('error', (err: Error) => {
-			if (global.sentryEnabled) {
-				Sentry.captureException(err);
-			}
-
-			this.log.error(err.stack);
-		});
-		(this._io as any).use(socketApiMiddleware);
 
 		/**
 		 * HTTP(S) server setup
@@ -118,6 +104,21 @@ export default class NodeCGServer extends EventEmitter {
 		} else {
 			server = require('http').createServer(app);
 		}
+
+		/**
+		 * Socket.IO server setup.
+		 * We cast to "any" for a few things because
+		 * typed-socket.io isn't quite perfect.
+		 */
+		this._io = SocketIO(server) as TypedServer;
+		(this._io as any).on('error', (err: Error) => {
+			if (global.sentryEnabled) {
+				Sentry.captureException(err);
+			}
+
+			this.log.error(err.stack);
+		});
+		(this._io as any).use(socketApiMiddleware);
 
 		this._server = server;
 	}
