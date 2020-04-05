@@ -1,9 +1,9 @@
-import { Entity, ManyToOne, Column, Generated } from 'typeorm';
+import { Entity, ManyToOne, Generated, PrimaryColumn } from 'typeorm';
 import { User } from './User';
 
 @Entity()
 export class ApiKey {
-	@Column()
+	@PrimaryColumn()
 	@Generated('uuid')
 	secret_key: string;
 

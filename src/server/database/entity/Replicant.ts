@@ -8,6 +8,6 @@ export class Replicant {
 	@PrimaryColumn('text')
 	name: string;
 
-	@Column('json')
+	@Column('text')
 	value: any;
 }

@@ -1,8 +1,11 @@
-import { Entity, ManyToOne } from 'typeorm';
+import { Entity, ManyToOne, PrimaryGeneratedColumn } from 'typeorm';
 import { User } from './User';
 
 @Entity()
 export class Identity {
+	@PrimaryGeneratedColumn('uuid')
+	id: string;
+
 	provider_type: 'twitch' | 'steam' | 'local';
 
 	/**
