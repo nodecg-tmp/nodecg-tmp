@@ -97,7 +97,7 @@ class NcgSoundCue extends Polymer.PolymerElement {
 		}
 
 		this._assetsRepInitialized = true;
-		const assetsRep = NodeCG.Replicant('assets:sounds', bundleName);
+		const assetsRep = new NodeCG.Replicant('assets:sounds', bundleName);
 		assetsRep.setMaxListeners(50);
 		assetsRep.on('change', newVal => {
 			if (this.assignable) {

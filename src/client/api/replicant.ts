@@ -54,7 +54,7 @@ export default class ClientReplicant<T> extends AbstractReplicant<T> {
 
 	private readonly _socket: TypedClientSocket;
 
-	constructor(name: string, namespace: string, opts: Options<T>, socket: TypedClientSocket) {
+	constructor(name: string, namespace: string, opts: Options<T>, socket: TypedClientSocket = (window as any).socket) {
 		super(name, namespace, opts);
 
 		// Load logger

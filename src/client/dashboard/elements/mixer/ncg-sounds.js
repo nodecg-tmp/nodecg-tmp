@@ -81,8 +81,8 @@ class NcgSounds extends Polymer.PolymerElement {
 		super.ready();
 
 		const cueElsByName = {};
-		this.bundleFaderRep = NodeCG.Replicant(`volume:${this.bundleName}`, '_sounds');
-		const cuesRep = NodeCG.Replicant('soundCues', this.bundleName);
+		this.bundleFaderRep = new NodeCG.Replicant(`volume:${this.bundleName}`, '_sounds');
+		const cuesRep = new NodeCG.Replicant('soundCues', this.bundleName);
 
 		this.bundleFaderRep.on('change', newVal => {
 			this.$.bundleFader.value = newVal;

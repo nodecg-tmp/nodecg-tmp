@@ -8,6 +8,7 @@ import { Options as ReplicantOptions } from '../../shared/replicants.shared';
 
 type SendMessageCb = (error?: unknown, response?: unknown) => void;
 
+const soundMetadata = new WeakMap<createjs.AbstractSoundInstance, { cueName: string; updateVolume: boolean }>();
 const apiContexts = new Set<NodeCGAPIClient>();
 
 /**
@@ -27,6 +28,8 @@ function _forwardMessageToContext(messageName: string, bundleName: string, data:
 }
 
 export class NodeCGAPIClient extends NodeCGAPIBase {
+	static Replicant = ClientReplicant;
+
 	get Logger(): new (name: string) => AbstractLogger {
 		return Logger;
 	}
@@ -54,7 +57,7 @@ export class NodeCGAPIClient extends NodeCGAPIBase {
 
 	private readonly _masterVolume: ClientReplicant<number>;
 
-	private readonly _soundCues: NodeCG.SoundCue[];
+	private _soundCues: NodeCG.SoundCue[] = [];
 
 	private _memoizedLogger?: AbstractLogger;
 
@@ -78,11 +81,10 @@ export class NodeCGAPIClient extends NodeCGAPIBase {
 		this.socket.emit('joinRoom', bundle.name, () => {});
 
 		if (bundle._hasSounds && window.createjs && window.createjs.Sound) {
-			const soundCuesRep = new ClientReplicant('soundCues', this.bundleName, {}, socket);
-			const customCuesRep = new ClientReplicant('customSoundCues', this.bundleName, {}, socket);
-			this._soundFiles = new ClientReplicant('assets:sounds', this.bundleName, {}, socket);
-			this._bundleVolume = new ClientReplicant(`volume:${this.bundleName}`, '_sounds', {}, socket);
-			this._masterVolume = new ClientReplicant('volume:master', '_sounds', {}, socket);
+			const soundCuesRep = new ClientReplicant<NodeCG.SoundCue[]>('soundCues', this.bundleName, {}, socket);
+			this._soundFiles = new ClientReplicant<NodeCG.AssetFile[]>('assets:sounds', this.bundleName, {}, socket);
+			this._bundleVolume = new ClientReplicant<number>(`volume:${this.bundleName}`, '_sounds', {}, socket);
+			this._masterVolume = new ClientReplicant<number>('volume:master', '_sounds', {}, socket);
 
 			this._soundCues = [];
 
@@ -107,17 +109,16 @@ export class NodeCGAPIClient extends NodeCGAPIBase {
 			});
 
 			const handleAnyCuesRepChange = (): void => {
-				_updateSoundCuesHas(this, soundCuesRep, customCuesRep);
-				_updateInstanceVolumes(this);
-				_registerSounds(this);
+				this._soundCues = soundCuesRep.value ?? [];
+				this._updateInstanceVolumes();
+				this._registerSounds();
 			};
 
-			soundCuesRep.on('change', handleAnyCuesRepChange.bind(this));
-			customCuesRep.on('change', handleAnyCuesRepChange.bind(this));
+			soundCuesRep.on('change', handleAnyCuesRepChange);
 
-			this._soundFiles.on('change', () => _registerSounds(this));
-			this._bundleVolume.on('change', () => _updateInstanceVolumes(this));
-			this._masterVolume.on('change', () => _updateInstanceVolumes(this));
+			this._soundFiles.on('change', () => this._registerSounds.bind(this));
+			this._bundleVolume.on('change', () => this._updateInstanceVolumes.bind(this));
+			this._masterVolume.on('change', () => this._updateInstanceVolumes.bind(this));
 		}
 
 		// Upon receiving a message, execute any handlers for it
@@ -146,7 +147,7 @@ export class NodeCGAPIClient extends NodeCGAPIBase {
 		});
 	}
 
-	/* eslint-disable @typescript-eslint/promise-function-async, no-dupe-class-members */
+	/* eslint-disable no-dupe-class-members */
 	static sendMessageToBundle(messageName: string, bundleName: string, cb: SendMessageCb): void;
 	static sendMessageToBundle(messageName: string, bundleName: string, data?: unknown): Promise<unknown>;
 	static sendMessageToBundle(messageName: string, bundleName: string, data: unknown, cb: SendMessageCb): void;
@@ -197,22 +198,10 @@ export class NodeCGAPIClient extends NodeCGAPIBase {
 			});
 		}
 	}
-	/* eslint-enable @typescript-eslint/promise-function-async, no-dupe-class-members */
+	/* eslint-enable no-dupe-class-members */
 
 	static readReplicant(name: string, namespace: string, cb: (value: unknown) => void): void {
 		window.socket.emit('replicant:read', { name, namespace }, cb);
-	}
-
-	static Replicant<T>(name: string, namespace: string, opts: ReplicantOptions<T>): ClientReplicant<T> {
-		if (!name || typeof name !== 'string') {
-			throw new Error('Must supply a name when reading a Replicant');
-		}
-
-		if (!namespace || typeof namespace !== 'string') {
-			throw new Error('Must supply a namespace when reading a Replicant');
-		}
-
-		return new ClientReplicant<T>(name, namespace, opts, (window as any).socket);
 	}
 
 	/**
@@ -287,12 +276,11 @@ export class NodeCGAPIClient extends NodeCGAPIBase {
 
 		// Create an instance of the sound, which begins playing immediately.
 		const instance = window.createjs.Sound.play(cueName);
-		instance.cueName = cueName;
 
 		// Set the volume.
-		_setInstanceVolume(this, instance, cue);
-		instance.updateVolume = updateVolume;
+		this._setInstanceVolume(instance, cue);
 
+		soundMetadata.set(instance, { cueName, updateVolume });
 		return instance;
 	}
 
@@ -316,7 +304,8 @@ export class NodeCGAPIClient extends NodeCGAPIBase {
 		const instancesArr = (window.createjs.Sound as any)._instances as createjs.AbstractSoundInstance[];
 		for (let i = instancesArr.length - 1; i >= 0; i--) {
 			const instance = instancesArr[i];
-			if (instance.cueName === cueName) {
+			const meta = soundMetadata.get(instance);
+			if (meta && meta.cueName === cueName) {
 				instance.stop();
 			}
 		}
@@ -340,58 +329,48 @@ export class NodeCGAPIClient extends NodeCGAPIBase {
 	): ClientReplicant<T> => {
 		return new ClientReplicant<T>(name, namespace, opts, this.socket);
 	};
-}
 
-function _updateSoundCuesHas(ctx: NodeCGAPIClient, soundCuesRep, customCuesRep): void {
-	if (soundCuesRep.status !== 'declared' || customCuesRep.status !== 'declared') {
-		return;
+	private _registerSounds(): void {
+		this._soundCues.forEach(cue => {
+			if (!cue.file) {
+				return;
+			}
+
+			window.createjs.Sound.registerSound(`${cue.file.url}?sum=${cue.file.sum}`, cue.name, {
+				channels: typeof cue.channels === 'undefined' ? 100 : cue.channels,
+				sum: cue.file.sum,
+			});
+		});
 	}
 
-	if (soundCuesRep.value && !customCuesRep.value) {
-		ctx._soundCues = soundCuesRep.value;
-		return;
-	}
-
-	if (!soundCuesRep.value && customCuesRep.value) {
-		ctx._soundCues = customCuesRep.value;
-		return;
-	}
-
-	ctx._soundCues = soundCuesRep.value.concat(customCuesRep.value);
-}
-
-function _registerSounds(ctx: NodeCGAPIClient): void {
-	ctx._soundCues.forEach(cue => {
-		if (!cue.file) {
+	private _setInstanceVolume(instance: createjs.AbstractSoundInstance, cue: NodeCG.SoundCue): void {
+		if (
+			this._masterVolume.status !== 'declared' ||
+			typeof this._masterVolume.value !== 'number' ||
+			this._bundleVolume.status !== 'declared' ||
+			typeof this._bundleVolume.value !== 'number'
+		) {
 			return;
 		}
 
-		window.createjs.Sound.registerSound(`${cue.file.url}?sum=${cue.file.sum}`, cue.name, {
-			channels: typeof cue.channels === 'undefined' ? 100 : cue.channels,
-			sum: cue.file.sum,
-		});
-	});
-}
+		const volume = (this._masterVolume.value / 100) * (this._bundleVolume.value / 100) * (cue.volume / 100);
+		// Volue value must be finite or SoundJS throws error
+		instance.volume = isFinite(volume) ? volume : 0;
+	}
 
-function _setInstanceVolume(
-	ctx: NodeCGAPIClient,
-	instance: createjs.AbstractSoundInstance,
-	cue: NodeCG.SoundCue,
-): void {
-	const volume = (ctx._masterVolume.value / 100) * (ctx._bundleVolume.value / 100) * (cue.volume / 100);
-	// Volue value must be finite or SoundJS throws error
-	instance.volume = isFinite(volume) ? volume : 0;
-}
+	private _updateInstanceVolumes(): void {
+		const instancesArr = (window.createjs.Sound as any)._instances as createjs.AbstractSoundInstance[];
 
-function _updateInstanceVolumes(ctx: NodeCGAPIClient): void {
-	// Update the volume of any playing instances that haven't opted out of automatic volume updates.
-	ctx._soundCues.forEach(cue => {
-		window.createjs.Sound._instances.forEach(instance => {
-			if (instance.cueName === cue.name && instance.updateVolume) {
-				_setInstanceVolume(ctx, instance, cue);
-			}
+		// Update the volume of any playing instances that haven't opted out of automatic volume updates.
+		this._soundCues.forEach(cue => {
+			instancesArr.forEach(instance => {
+				const meta = soundMetadata.get(instance);
+				if (meta && meta.cueName === cue.name && meta.updateVolume) {
+					this._setInstanceVolume(instance, cue);
+				}
+			});
 		});
-	});
+	}
 }
 
 (window as any).NodeCG = NodeCGAPIClient;
