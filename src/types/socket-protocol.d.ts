@@ -147,6 +147,11 @@ export interface ProtocolDefinition extends ServerDefinition {
 					response: unknown;
 					error: void;
 				};
+				joinRoom: {
+					request: string;
+					response: void;
+					error: string;
+				};
 			};
 			// messages clients can send to the server (without a response)
 			ClientMessages: {

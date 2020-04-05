@@ -5,20 +5,15 @@ import path from 'path';
 // Packages
 import clone from 'clone';
 import express from 'express';
-import { Except } from 'type-fest';
 
 // Ours
 import * as bundles from './bundle-manager';
-import config, { filteredConfig } from './config';
+import { config, filteredConfig } from './config';
 import createLogger from './logger';
 import * as ncgUtils from './util';
 
 type DashboardContext = {
-	bundles: Array<
-		Except<NodeCG.Bundle, 'dashboardPanels'> & {
-			dashboardPanels: Array<Except<NodeCG.Bundle.DashboardPanel, 'html'>>;
-		}
-	>;
+	bundles: NodeCG.Bundle[];
 	publicConfig: typeof filteredConfig;
 	privateConfig: typeof config;
 	workspaces: Workspace[];
@@ -100,7 +95,7 @@ export default class DashboardLib {
 			const resName = req.params[0];
 			// If the target file is a panel or dialog, inject the appropriate scripts.
 			// Else, serve the file as-is.
-			const panel = bundle.dashboardPanels.find(p => p.file === resName);
+			const panel = bundle.dashboard.panels.find(p => p.file === resName);
 			if (panel) {
 				const resourceType = panel.dialog ? 'dialog' : 'panel';
 				ncgUtils.injectScripts(
@@ -141,8 +136,8 @@ function getDashboardContext(): DashboardContext {
 	return {
 		bundles: bundles.all().map(bundle => {
 			const cleanedBundle = clone(bundle);
-			if (cleanedBundle.dashboardPanels) {
-				cleanedBundle.dashboardPanels.forEach(panel => {
+			if (cleanedBundle.dashboard.panels) {
+				cleanedBundle.dashboard.panels.forEach(panel => {
 					delete panel.html;
 				});
 			}

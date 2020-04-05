@@ -7,13 +7,8 @@ import * as fs from 'fs-extra';
 import winston from 'winston';
 import * as Sentry from '@sentry/node';
 
-const enum LogLevel {
-	Trace = 'verbose',
-	Debug = 'debug',
-	Info = 'info',
-	Warn = 'warn',
-	Error = 'error',
-}
+// Ours
+import { LoggerInterface, LogLevel } from '../../shared/logger-interface';
 
 type LoggerOptions = {
 	console: {

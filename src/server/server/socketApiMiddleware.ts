@@ -36,17 +36,15 @@ export default async function(socket: TypedServerSocket, next: SocketIO.NextFunc
 
 		socket.on('joinRoom', (room, cb) => {
 			if (typeof room !== 'string') {
-				throw new Error('Room must be a string');
+				return cb('Room must be a string');
 			}
 
-			if (Object.keys(socket.rooms).includes(room)) {
+			if (!Object.keys((socket as any).rooms).includes(room)) {
 				log.trace('Socket %s joined room:', socket.id, room);
 				socket.join(room);
 			}
 
-			if (typeof cb === 'function') {
-				cb();
-			}
+			cb(null);
 		});
 
 		next();

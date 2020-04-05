@@ -2,15 +2,15 @@
 import * as Sentry from '@sentry/node';
 
 // Ours
-import configHelper from '../config';
+import { config } from '../config';
 import loggerFactory from './logger.server';
 import { LoggerInterface } from '../../shared/logger-interface';
 
 export let Logger: new (name: string) => LoggerInterface;
-if (configHelper.config.sentry.enabled) {
-	Logger = loggerFactory(configHelper.config.logging, Sentry);
+if (config.sentry?.enabled) {
+	Logger = loggerFactory(config.logging as any, Sentry);
 } else {
-	Logger = loggerFactory(configHelper.config.logging);
+	Logger = loggerFactory(config.logging as any);
 }
 
 export default function(name: string): LoggerInterface {

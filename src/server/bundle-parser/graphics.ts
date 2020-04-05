@@ -65,6 +65,7 @@ export default function(graphicsDir: string, manifest: NodeCG.Manifest): NodeCG.
 
 		const parsedGraphic: NodeCG.Bundle.Graphic = {
 			...graphic,
+			singleInstance: Boolean(graphic.singleInstance),
 			url: `/bundles/${manifest.name}/graphics/${graphic.file}`,
 		};
 

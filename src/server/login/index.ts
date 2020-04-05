@@ -11,7 +11,7 @@ import { Strategy as LocalStrategy } from 'passport-local';
 import { TypeormStore } from 'connect-typeorm';
 
 // Ours
-import config from '../config';
+import { config } from '../config';
 import createLogger from '../logger';
 import { User, Session, Role, getConnection } from '../database';
 import { findUser, upsertUser, getSuperUserRole } from '../database/utils';
@@ -19,7 +19,7 @@ import { findUser, upsertUser, getSuperUserRole } from '../database/utils';
 type StrategyDoneCb = (error: NodeJS.ErrnoException | null, profile?: User) => void;
 
 const log = createLogger('nodecg/lib/login');
-const protocol = (config.ssl && config.ssl.enabled) || config.login.forceHttpsReturn ? 'https' : 'http';
+const protocol = (config.ssl && config.ssl.enabled) || config.login?.forceHttpsReturn ? 'https' : 'http';
 
 // Required for persistent login sessions.
 // Passport needs ability to serialize and unserialize users out of session.
@@ -47,7 +47,7 @@ if (config?.login?.steam?.enabled) {
 			) => {
 				try {
 					const roles: Role[] = [];
-					const allowed = config.login.steam.allowedIds.includes(profile.id);
+					const allowed = config.login?.steam?.allowedIds.includes(profile.id);
 					if (allowed) {
 						log.info('Granting %s (%s) access', profile.id, profile.displayName);
 						roles.push(await getSuperUserRole());
@@ -97,7 +97,7 @@ if (config?.login?.twitch?.enabled) {
 			) => {
 				try {
 					const roles: Role[] = [];
-					const allowed = config.login.twitch.allowedUsernames.includes(profile.username);
+					const allowed = config.login?.twitch?.allowedUsernames.includes(profile.username);
 					if (allowed) {
 						log.info('Granting %s access', profile.username);
 						roles.push(await getSuperUserRole());
@@ -120,7 +120,7 @@ if (config?.login?.twitch?.enabled) {
 	);
 }
 
-if (config.login.local && config.login.local.enabled) {
+if (config.login?.local?.enabled) {
 	const {
 		sessionSecret,
 		local: { allowedUsers },
@@ -141,7 +141,7 @@ if (config.login.local && config.login.local.enabled) {
 					let allowed = false;
 
 					if (foundUser) {
-						const match = /^([^:]+):(.+)$/.exec(foundUser.password);
+						const match = /^([^:]+):(.+)$/.exec(foundUser.password ?? '');
 						let expected = foundUser.password;
 						let actual = password;
 
@@ -185,6 +185,10 @@ export async function createMiddleware(): Promise<express.Application> {
 		res.redirect(url);
 		app.emit('login', req.session);
 	};
+
+	if (!config.login?.sessionSecret) {
+		throw new Error("no session secret defined, can't salt sessions, not safe, aborting");
+	}
 
 	app.use(
 		expressSession({

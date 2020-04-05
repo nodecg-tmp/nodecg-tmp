@@ -7,3 +7,11 @@ export interface LoggerInterface {
 	error: (...args: any[]) => void;
 	replicants: (...args: any[]) => void;
 }
+
+export enum LogLevel {
+	Trace = 'verbose',
+	Debug = 'debug',
+	Info = 'info',
+	Warn = 'warn',
+	Error = 'error',
+}

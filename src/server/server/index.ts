@@ -1,7 +1,7 @@
 // Minimal imports for first setup
 import * as os from 'os';
 import * as Sentry from '@sentry/node';
-import config, { filteredConfig } from '../config';
+import { config, filteredConfig } from '../config';
 import '../util/sentry-config';
 import * as pjson from '../../../package.json';
 
@@ -158,7 +158,7 @@ export default class NodeCGServer extends EventEmitter {
 			});
 		}
 
-		const bundlesPaths = [path.join(process.env.NODECG_ROOT, 'bundles')].concat(config.bundles.paths);
+		const bundlesPaths = [path.join(process.env.NODECG_ROOT, 'bundles')].concat(config.bundles?.paths ?? []);
 		const cfgPath = path.join(process.env.NODECG_ROOT, 'cfg');
 		bundleApi.init(bundlesPaths, cfgPath, pjson.version, config);
 		bundleApi.all().forEach(bundle => {
@@ -310,7 +310,7 @@ export default class NodeCGServer extends EventEmitter {
 	}
 
 	getExtensions(): { [k: string]: unknown } {
-		return this._extensionManager.getExtensions();
+		return { ...this._extensionManager.extensions };
 	}
 
 	getSocketIOServer(): TypedServer {

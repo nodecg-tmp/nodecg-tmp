@@ -4,14 +4,14 @@ import express from 'express';
 // Ours
 import { getConnection, ApiKey } from '../database';
 import { isSuperUser } from '../database/utils';
-import config from '../config';
+import { config } from '../config';
 
 /**
  * Express middleware that checks if the user is authenticated.
  */
 export default async function(req: express.Request, res: express.Response, next: express.NextFunction): Promise<void> {
 	try {
-		if (!config.login.enabled) {
+		if (!config.login?.enabled) {
 			return next();
 		}
 
@@ -68,7 +68,7 @@ export default async function(req: express.Request, res: express.Response, next:
 
 		const allowed = isSuperUser(user);
 		const provider = user.identities[0]?.provider_type;
-		const providerAllowed = provider in config.login && config.login[provider].enabled;
+		const providerAllowed = config.login && config.login[provider]?.enabled;
 		if (req.isAuthenticated() && allowed && providerAllowed) {
 			return next();
 		}

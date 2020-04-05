@@ -14,4 +14,5 @@ if (!fs.existsSync(cfgDirectoryPath)) {
 	fs.mkdirpSync(cfgDirectoryPath);
 }
 
-export default loadConfig(cfgDirectoryPath);
+const { config, filteredConfig } = loadConfig(cfgDirectoryPath);
+export { config, filteredConfig };

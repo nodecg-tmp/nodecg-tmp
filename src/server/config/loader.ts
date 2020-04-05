@@ -5,7 +5,8 @@ import 'joi-extract-type';
 import { cosmiconfigSync as cosmiconfig } from 'cosmiconfig';
 import { argv } from 'yargs';
 
-const LOG_LEVELS = ['trace', 'debug', 'info', 'warn', 'error'];
+// Ours
+import { LogLevel } from '../../shared/logger-interface';
 
 // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
 function getConfigSchema(userConfig: { [k: string]: any } | null) {
@@ -29,32 +30,36 @@ function getConfigSchema(userConfig: { [k: string]: any } | null) {
 					"If you use a reverse proxy, you'll likely need to set this value.",
 			),
 
-		exitOnUncaught: Joi.bool()
+		exitOnUncaught: Joi.boolean()
 			.default(true)
-			.description('Whether or not to exit on uncaught exceptions.'),
+			.description('Whether or not to exit on uncaught exceptions.')
+			.required(),
 
 		logging: Joi.object({
-			replicants: Joi.bool()
+			replicants: Joi.boolean()
 				.default(false)
-				.description('Whether to enable logging of the Replicants subsystem. Very spammy.'),
+				.description('Whether to enable logging of the Replicants subsystem. Very spammy.')
+				.required(),
 
 			console: Joi.object({
-				enabled: Joi.bool()
+				enabled: Joi.boolean()
 					.default(true)
-					.description('Whether to enable console logging.'),
+					.description('Whether to enable console logging.')
+					.required(),
 
 				level: Joi.string()
-					.valid(...LOG_LEVELS)
+					.valid(...Object.values(LogLevel))
 					.default('info'),
 			}).required(),
 
 			file: Joi.object({
-				enabled: Joi.bool()
+				enabled: Joi.boolean()
 					.default(false)
-					.description('Whether to enable file logging.'),
+					.description('Whether to enable file logging.')
+					.required(),
 
 				level: Joi.string()
-					.valid(...LOG_LEVELS)
+					.valid(...Object.values(LogLevel))
 					.default('info'),
 
 				path: Joi.string()
@@ -83,9 +88,10 @@ function getConfigSchema(userConfig: { [k: string]: any } | null) {
 		}),
 
 		login: Joi.object({
-			enabled: Joi.bool()
+			enabled: Joi.boolean()
 				.default(false)
-				.description('Whether to enable login security.'),
+				.description('Whether to enable login security.')
+				.required(),
 
 			sessionSecret: Joi.string()
 				// This will throw if the user does not provide a value, but only if login security is enabled.
@@ -93,16 +99,18 @@ function getConfigSchema(userConfig: { [k: string]: any } | null) {
 				.description('The secret used to salt sessions.')
 				.required(),
 
-			forceHttpsReturn: Joi.bool()
+			forceHttpsReturn: Joi.boolean()
 				.default(false)
 				.description(
 					'Forces Steam & Twitch login return URLs to use HTTPS instead of HTTP. Useful in reverse proxy setups.',
-				),
+				)
+				.required(),
 
 			steam: Joi.object({
-				enabled: Joi.bool()
+				enabled: Joi.boolean()
 					.default(false)
-					.description('Whether to enable Steam authentication.'),
+					.description('Whether to enable Steam authentication.')
+					.required(),
 
 				apiKey: Joi.string()
 					// This will throw if the user does not provide a value, but only if Steam auth is enabled.
@@ -119,9 +127,10 @@ function getConfigSchema(userConfig: { [k: string]: any } | null) {
 			}),
 
 			twitch: Joi.object({
-				enabled: Joi.bool()
+				enabled: Joi.boolean()
 					.default(false)
-					.description('Whether to enable Twitch authentication.'),
+					.description('Whether to enable Twitch authentication.')
+					.required(),
 
 				clientID: Joi.string()
 					// This will throw if the user does not provide a value, but only if Twitch auth is enabled.
@@ -148,9 +157,10 @@ function getConfigSchema(userConfig: { [k: string]: any } | null) {
 			}),
 
 			local: Joi.object({
-				enabled: Joi.bool()
+				enabled: Joi.boolean()
 					.default(false)
-					.description('Enable Local authentication.'),
+					.description('Enable Local authentication.')
+					.required(),
 
 				allowedUsers: Joi.array()
 					.items(
@@ -167,23 +177,27 @@ function getConfigSchema(userConfig: { [k: string]: any } | null) {
 		}).optional(),
 
 		ssl: Joi.object({
-			enabled: Joi.bool()
+			enabled: Joi.boolean()
 				.default(false)
-				.description('Whether to enable SSL/HTTPS encryption.'),
+				.description('Whether to enable SSL/HTTPS encryption.')
+				.required(),
 
-			allowHTTP: Joi.bool()
+			allowHTTP: Joi.boolean()
 				.default(false)
-				.description('Whether to allow insecure HTTP connections while SSL is active.'),
+				.description('Whether to allow insecure HTTP connections while SSL is active.')
+				.required(),
 
 			keyPath: Joi.string()
 				// This will throw if the user does not provide a value, but only if SSL is enabled.
 				.default(userConfig?.ssl?.enabled ? null : '')
-				.description('The path to an SSL key file.'),
+				.description('The path to an SSL key file.')
+				.required(),
 
 			certificatePath: Joi.string()
 				// This will throw if the user does not provide a value, but only if SSL is enabled.
 				.default(userConfig?.ssl?.enabled ? null : '')
-				.description('The path to an SSL certificate file.'),
+				.description('The path to an SSL certificate file.')
+				.required(),
 
 			passphrase: Joi.string()
 				.default('')
@@ -191,9 +205,10 @@ function getConfigSchema(userConfig: { [k: string]: any } | null) {
 		}).optional(),
 
 		sentry: Joi.object({
-			enabled: Joi.bool()
+			enabled: Joi.boolean()
 				.default(false)
-				.description('Whether to enable Sentry error reporting.'),
+				.description('Whether to enable Sentry error reporting.')
+				.required(),
 
 			dsn: Joi.string()
 				// This will throw if the user does not provide a value, but only if Sentry is enabled.
@@ -241,7 +256,7 @@ export default function(cfgDir: string) {
 		port: number;
 		baseURL: string;
 		logging: {
-			replicants: string;
+			replicants: boolean;
 			console: {
 				enabled: boolean;
 				level: string;
@@ -285,7 +300,7 @@ export default function(cfgDir: string) {
 			},
 		},
 		sentry: {
-			enabled: config.sentry?.enabled,
+			enabled: config.sentry?.enabled ?? false,
 			dsn: config.sentry?.dsn ?? '',
 		},
 	};

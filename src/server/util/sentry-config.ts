@@ -7,7 +7,7 @@ import * as Sentry from '@sentry/node';
 import express from 'express';
 
 // Ours
-import config from '../config';
+import { config } from '../config';
 import bundleManager, { all as getAllBundles } from '../bundle-manager';
 import { authCheck } from '../util';
 import * as pjson from '../../../package.json';
@@ -15,7 +15,7 @@ import * as pjson from '../../../package.json';
 export const bundleMetadata: Array<{ name: string; git: NodeCG.Bundle.GitData; version: string }> = [];
 export const app = express();
 const baseSentryConfig = {
-	dsn: config.sentry.dsn,
+	dsn: config.sentry?.dsn,
 	serverName: os.hostname(),
 	release: pjson.version,
 };

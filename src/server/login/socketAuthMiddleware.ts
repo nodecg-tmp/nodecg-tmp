@@ -4,7 +4,7 @@ import SocketIO from 'socket.io';
 // Ours
 import { getConnection, ApiKey } from '../database';
 import { isSuperUser } from '../database/utils';
-import config from '../config';
+import { config } from '../config';
 import UnauthorizedError, { Code as UnauthErrCode } from '../login/UnauthorizedError';
 import { TypedServerSocket } from '../../types/socket-protocol';
 
@@ -34,7 +34,7 @@ export default async function(socket: TypedServerSocket, next: SocketIO.NextFunc
 
 		// But only authed sockets can join the Authed room.
 		const provider = user.identities[0]?.provider_type;
-		const providerAllowed = provider in config.login && config.login[provider].enabled;
+		const providerAllowed = config.login && config.login[provider]?.enabled;
 		const allowed = isSuperUser(user) && providerAllowed;
 
 		if (allowed) {

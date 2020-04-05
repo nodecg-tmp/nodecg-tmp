@@ -6,7 +6,7 @@ import * as fs from 'fs';
 import cheerio from 'cheerio';
 
 export default function(dashboardDir: string, manifest: NodeCG.Manifest): NodeCG.Bundle.Panel[] {
-	const unparsedPanels = manifest.dashboardPanels;
+	const unparsedPanels = manifest.dashboardPanels ?? [];
 	const bundleName = manifest.name;
 	const panels: NodeCG.Bundle.Panel[] = [];
 

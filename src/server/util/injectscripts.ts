@@ -8,7 +8,7 @@ import semver from 'semver';
 
 // Ours
 import * as bundles from '../bundle-manager';
-import config, { filteredConfig } from '../config';
+import { config, filteredConfig } from '../config';
 import { noop } from '../util';
 
 type Options = {
@@ -40,7 +40,7 @@ export default function(
 			throw err;
 		}
 
-		const bundle = bundles.find(createApiInstance?.name);
+		const bundle = bundles.find(createApiInstance?.name ?? '');
 		const $ = cheerio.load(html);
 		let scripts = [];
 		let styles = [];
@@ -97,11 +97,6 @@ export default function(
 			}
 		} else if (resourceType === 'graphic') {
 			if (config.sentry && config.sentry.enabled) {
-				const baseSentryConfig = {
-					dsn: config.sentry.dsn,
-					serverName: os.hostname(),
-					release: pjson.version,
-				};
 				scripts.unshift('<script src="/sentry.js" type="module"></script>');
 			}
 
