@@ -3,14 +3,13 @@ import clone from 'clone';
 import * as Joi from '@hapi/joi';
 import 'joi-extract-type';
 import { cosmiconfigSync as cosmiconfig } from 'cosmiconfig';
-import { SetOptional } from 'type-fest';
 import { argv } from 'yargs';
 
 const LOG_LEVELS = ['trace', 'debug', 'info', 'warn', 'error'];
 
 // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
 function getConfigSchema(userConfig: { [k: string]: any } | null) {
-	const baseSchema = {
+	return Joi.object({
 		host: Joi.alternatives()
 			.try(Joi.string().ip(), Joi.string().hostname())
 			.required()
@@ -47,7 +46,7 @@ function getConfigSchema(userConfig: { [k: string]: any } | null) {
 				level: Joi.string()
 					.valid(...LOG_LEVELS)
 					.default('info'),
-			}),
+			}).required(),
 
 			file: Joi.object({
 				enabled: Joi.bool()
@@ -61,7 +60,7 @@ function getConfigSchema(userConfig: { [k: string]: any } | null) {
 				path: Joi.string()
 					.default('logs/nodecg.log')
 					.description('The filepath to log to.'),
-			}),
+			}).required(),
 		}).required(),
 
 		bundles: Joi.object({
@@ -82,17 +81,7 @@ function getConfigSchema(userConfig: { [k: string]: any } | null) {
 				.default(argv.bundlesPaths ?? [])
 				.description('An array of additional paths where bundles are located.'),
 		}),
-	};
 
-	if (!userConfig) {
-		return Joi.object(baseSchema);
-	}
-
-	if (userConfig?.bundles?.enabled && userConfig?.bundles?.disabled) {
-		throw new Error('nodecg.json may only contain EITHER bundles.enabled OR bundles.disabled, not both.');
-	}
-
-	const extendedSchema = {
 		login: Joi.object({
 			enabled: Joi.bool()
 				.default(false)
@@ -101,7 +90,8 @@ function getConfigSchema(userConfig: { [k: string]: any } | null) {
 			sessionSecret: Joi.string()
 				// This will throw if the user does not provide a value, but only if login security is enabled.
 				.default(userConfig?.login?.enabled ? null : '')
-				.description('The secret used to salt sessions.'),
+				.description('The secret used to salt sessions.')
+				.required(),
 
 			forceHttpsReturn: Joi.bool()
 				.default(false)
@@ -117,13 +107,15 @@ function getConfigSchema(userConfig: { [k: string]: any } | null) {
 				apiKey: Joi.string()
 					// This will throw if the user does not provide a value, but only if Steam auth is enabled.
 					.default(userConfig?.login?.steam?.enabled ? null : '')
-					.description('A Steam API Key. Obtained from http://steamcommunity.com/dev/apikey'),
+					.description('A Steam API Key. Obtained from http://steamcommunity.com/dev/apikey')
+					.required(),
 
 				allowedIds: Joi.array()
 					.items(Joi.string())
 					// This will throw if the user does not provide a value, but only if Steam auth is enabled.
 					.default(userConfig?.login?.steam?.enabled ? null : [])
-					.description('Which 64 bit Steam IDs to allow. Can be obtained from https://steamid.io/'),
+					.description('Which 64 bit Steam IDs to allow. Can be obtained from https://steamid.io/')
+					.required(),
 			}),
 
 			twitch: Joi.object({
@@ -134,12 +126,14 @@ function getConfigSchema(userConfig: { [k: string]: any } | null) {
 				clientID: Joi.string()
 					// This will throw if the user does not provide a value, but only if Twitch auth is enabled.
 					.default(userConfig?.login?.twitch?.enabled ? null : '')
-					.description('A Twitch application ClientID http://twitch.tv/kraken/oauth2/clients/new'),
+					.description('A Twitch application ClientID http://twitch.tv/kraken/oauth2/clients/new')
+					.required(),
 
 				clientSecret: Joi.string()
 					// This will throw if the user does not provide a value, but only if Twitch auth is enabled.
 					.default(userConfig?.login?.twitch?.enabled ? null : '')
-					.description('A Twitch application ClientSecret http://twitch.tv/kraken/oauth2/clients/new'),
+					.description('A Twitch application ClientSecret http://twitch.tv/kraken/oauth2/clients/new')
+					.required(),
 
 				scope: Joi.string()
 					.default('user_read')
@@ -149,7 +143,8 @@ function getConfigSchema(userConfig: { [k: string]: any } | null) {
 					.items(Joi.string())
 					// This will throw if the user does not provide a value, but only if Twitch auth is enabled.
 					.default(userConfig?.login?.twitch?.enabled ? null : [])
-					.description('Which Twitch usernames to allow.'),
+					.description('Which Twitch usernames to allow.')
+					.required(),
 			}),
 
 			local: Joi.object({
@@ -166,9 +161,10 @@ function getConfigSchema(userConfig: { [k: string]: any } | null) {
 					)
 					// This will throw if the user does not provide a value, but only if Local auth is enabled.
 					.default(userConfig?.login?.local?.enabled ? null : [])
-					.description('Which users can log in.'),
+					.description('Which users can log in.')
+					.required(),
 			}),
-		}),
+		}).optional(),
 
 		ssl: Joi.object({
 			enabled: Joi.bool()
@@ -192,7 +188,7 @@ function getConfigSchema(userConfig: { [k: string]: any } | null) {
 			passphrase: Joi.string()
 				.default('')
 				.description('The passphrase for the provided key file.'),
-		}),
+		}).optional(),
 
 		sentry: Joi.object({
 			enabled: Joi.bool()
@@ -203,10 +199,8 @@ function getConfigSchema(userConfig: { [k: string]: any } | null) {
 				// This will throw if the user does not provide a value, but only if Sentry is enabled.
 				.default(userConfig?.sentry?.enabled ? null : '')
 				.description("Your project's DSN, used to route alerts to the correct place."),
-		}),
-	};
-
-	return Joi.object({ ...baseSchema, ...extendedSchema });
+		}).optional(),
+	});
 }
 
 // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
@@ -217,7 +211,10 @@ export default function(cfgDir: string) {
 	});
 	const result = cc.search(cfgDir);
 	const userCfg = result?.config;
-	if (!userCfg) {
+
+	if (userCfg?.bundles?.enabled && userCfg?.bundles?.disabled) {
+		throw new Error('nodecg.json may only contain EITHER bundles.enabled OR bundles.disabled, not both.');
+	} else if (!userCfg) {
 		console.info('[nodecg] No config found, using defaults.');
 	}
 
@@ -239,12 +236,43 @@ export default function(cfgDir: string) {
 		config.baseURL ?? `${config.host === '0.0.0.0' ? 'localhost' : String(config.host)}:${String(config.port)}`;
 
 	// Create the filtered config
-	type FilteredConfig = SetOptional<
-		Pick<typeof config, 'host' | 'port' | 'baseURL' | 'logging' | 'sentry' | 'login' | 'ssl'>,
-		'login' | 'ssl'
-	>;
-
-	const filteredConfig: FilteredConfig = {
+	const filteredConfig: {
+		host: string;
+		port: number;
+		baseURL: string;
+		logging: {
+			replicants: string;
+			console: {
+				enabled: boolean;
+				level: string;
+			};
+			file: {
+				enabled: boolean;
+				level: string;
+			};
+		};
+		sentry: {
+			enabled: boolean;
+			dsn: string;
+		};
+		login?: {
+			enabled: boolean;
+			steam?: {
+				enabled: boolean;
+			};
+			twitch?: {
+				enabled: boolean;
+				clientID: string;
+				scope: string;
+			};
+			local?: {
+				enabled: boolean;
+			};
+		};
+		ssl?: {
+			enabled: boolean;
+		};
+	} = {
 		host: config.host,
 		port: config.port,
 		baseURL: config.baseURL,
@@ -257,23 +285,23 @@ export default function(cfgDir: string) {
 			},
 		},
 		sentry: {
-			enabled: config.sentry.enabled,
-			publicDsn: config.sentry.publicDsn,
+			enabled: config.sentry?.enabled,
+			dsn: config.sentry?.dsn ?? '',
 		},
 	};
 
-	if ('login' in config) {
+	if (config.login) {
 		filteredConfig.login = {
 			enabled: config.login.enabled,
 		};
 
-		if ('steam' in config.login) {
+		if (config.login.steam) {
 			filteredConfig.login.steam = {
 				enabled: config.login.steam.enabled,
 			};
 		}
 
-		if ('twitch' in config.login) {
+		if (config.login.twitch) {
 			filteredConfig.login.twitch = {
 				enabled: config.login.twitch.enabled,
 				clientID: config.login.twitch.clientID,
@@ -281,14 +309,14 @@ export default function(cfgDir: string) {
 			};
 		}
 
-		if ('local' in config.login) {
+		if (config.login.local) {
 			filteredConfig.login.local = {
 				enabled: config.login.local.enabled,
 			};
 		}
 	}
 
-	if ('ssl' in config) {
+	if (config.ssl) {
 		filteredConfig.ssl = {
 			enabled: config.ssl.enabled,
 		};
