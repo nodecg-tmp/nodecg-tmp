@@ -1,25 +1,24 @@
 // Ours
-import { NodeCGAPIBase } from '../../shared/api.base';
+import { NodeCGAPIBase, AbstractLogger } from '../../shared/api.base';
 import { Replicant } from './replicant';
-
-const Logger = require('./logger');
-const { filteredConfig } = require('./config');
+import { filteredConfig } from './config';
+import { Logger } from './logger';
 
 export class NodeCGAPIClient extends NodeCGAPIBase {
-	get Logger() {
+	get Logger(): new (name: string) => AbstractLogger {
 		return Logger;
 	}
 
-	get log() {
+	get log(): AbstractLogger {
 		if (this._memoizedLogger) {
 			return this._memoizedLogger;
 		}
 
-		this._memoizedLogger = new Logger(bundle.name);
+		this._memoizedLogger = new Logger(this.bundleName);
 		return this._memoizedLogger;
 	}
 
-	get config() {
+	get config(): typeof filteredConfig {
 		return JSON.parse(JSON.stringify(filteredConfig));
 	}
 
@@ -35,9 +34,9 @@ export class NodeCGAPIClient extends NodeCGAPIBase {
 
 	private _soundCues: SoundCue[]; // TODO: type this
 
-	private _memoizedLogger?: Logger;
+	private _memoizedLogger?: AbstractLogger;
 
-	constructor(bundle, socket: SocketIOClient.Socket) {
+	constructor(bundle: NodeCG.Bundle, socket: SocketIOClient.Socket) {
 		super(bundle);
 
 		// If title isn't set, set it to the bundle name
@@ -167,7 +166,7 @@ export class NodeCGAPIClient extends NodeCGAPIBase {
 		}
 	}
 
-	static readReplicant(name: string, namespace: string, cb) {
+	static readReplicant(name: string, namespace: string, cb: (value: unknown) => void): void {
 		NodeCGAPIBase.readReplicant(name, namespace);
 		window.socket.emit('replicant:read', { name, namespace }, cb);
 	}
@@ -183,11 +182,17 @@ export class NodeCGAPIClient extends NodeCGAPIBase {
 	 * @param {string} [bundle=CURR_BNDL] - The bundle from which to select the dialog.
 	 * @returns {object}
 	 */
-	getDialog(name, bundle) {
+	getDialog(name: string, bundle: string): HTMLElement | undefined {
 		bundle = bundle || this.bundleName;
-		return window.top.document
+		const topDoc = window.top?.document;
+		if (!topDoc) {
+			return undefined;
+		}
+
+		const dialog = topDoc
 			.querySelector('ncg-dashboard')
-			.shadowRoot.querySelector(`#dialogs #${bundle}_${name}`);
+			?.shadowRoot?.querySelector(`#dialogs #${bundle}_${name}`) as HTMLElement;
+		return dialog ?? undefined;
 	}
 
 	/**
@@ -197,9 +202,9 @@ export class NodeCGAPIClient extends NodeCGAPIBase {
 	 * @param {string} [bundle=CURR_BNDL] - The bundle from which to select the dialog.
 	 * @returns {object}
 	 */
-	getDialogDocument(name, bundle) {
-		bundle = bundle || this.bundleName;
-		return this.getDialog(name, bundle).querySelector('iframe').contentWindow.document;
+	getDialogDocument(name: string, bundle?: string): Document | undefined {
+		bundle = bundle ?? this.bundleName;
+		return this.getDialog(name, bundle)?.querySelector('iframe')?.contentWindow?.document;
 	}
 
 	/**
@@ -208,7 +213,7 @@ export class NodeCGAPIClient extends NodeCGAPIBase {
 	 * @param cueName {String}
 	 * @returns {Object|undefined} - A NodeCG cue object.
 	 */
-	findCue(cueName) {
+	findCue(cueName: string) {
 		return this._soundCues.find(cue => cue.name === cueName);
 	}
 
@@ -221,7 +226,7 @@ export class NodeCGAPIClient extends NodeCGAPIBase {
 	 * when the user changes it on the dashboard.
 	 * @returns {Object|undefined} - A SoundJS AbstractAudioInstance.
 	 */
-	playSound(cueName, opts) {
+	playSound(cueName: string, opts) {
 		if (!this._soundCues) {
 			throw new Error(`Bundle "${this.bundleName}" has no soundCues`);
 		}
@@ -259,7 +264,7 @@ export class NodeCGAPIClient extends NodeCGAPIBase {
 	 * Stops all currently playing instances of the provided `cueName`.
 	 * @param cueName {String}
 	 */
-	stopSound(cueName) {
+	stopSound(cueName: string): void {
 		if (!this._soundCues) {
 			throw new Error(`Bundle "${this.bundleName}" has no soundCues`);
 		}
@@ -283,7 +288,7 @@ export class NodeCGAPIClient extends NodeCGAPIBase {
 	/**
 	 * Stops all currently playing sounds on the page.
 	 */
-	stopAllSounds() {
+	stopAllSounds(): void {
 		if (!window.createjs || !window.createjs.Sound) {
 			throw new Error("NodeCG Sound API methods are not available when SoundJS isn't present");
 		}
@@ -292,7 +297,7 @@ export class NodeCGAPIClient extends NodeCGAPIBase {
 	}
 }
 
-function _updateSoundCuesHas(ctx, soundCuesRep, customCuesRep) {
+function _updateSoundCuesHas(ctx: NodeCGAPIClient, soundCuesRep, customCuesRep) {
 	if (soundCuesRep.status !== 'declared' || customCuesRep.status !== 'declared') {
 		return;
 	}
@@ -310,7 +315,7 @@ function _updateSoundCuesHas(ctx, soundCuesRep, customCuesRep) {
 	ctx._soundCues = soundCuesRep.value.concat(customCuesRep.value);
 }
 
-function _registerSounds(ctx) {
+function _registerSounds(ctx: NodeCGAPIClient) {
 	ctx._soundCues.forEach(cue => {
 		if (!cue.file) {
 			return;
@@ -323,13 +328,13 @@ function _registerSounds(ctx) {
 	});
 }
 
-function _setInstanceVolume(ctx, instance, cue) {
+function _setInstanceVolume(ctx: NodeCGAPIClient, instance, cue) {
 	const volume = (ctx._masterVolume.value / 100) * (ctx._bundleVolume.value / 100) * (cue.volume / 100);
 	// Volue value must be finite or SoundJS throws error
 	instance.volume = isFinite(volume) ? volume : 0;
 }
 
-function _updateInstanceVolumes(ctx) {
+function _updateInstanceVolumes(ctx: NodeCGAPIClient) {
 	// Update the volume of any playing instances that haven't opted out of automatic volume updates.
 	ctx._soundCues.forEach(cue => {
 		createjs.Sound._instances.forEach(instance => {
