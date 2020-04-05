@@ -21,7 +21,9 @@
 			Object.freeze(window.__renderData__);
 		</script>
 
-		<script src="/sentry.js" type="module"></script
+		<% if (sentryEnabled) { %>
+			<script src="/sentry.js" type="module"></script>
+		<% } %>
 
 		<!-- Register service worker -->
 		<script type="text/javascript">

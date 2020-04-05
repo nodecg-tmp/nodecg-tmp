@@ -8,7 +8,7 @@ import semver from 'semver';
 
 // Ours
 import * as bundles from '../bundle-manager';
-import { config, filteredConfig } from '../config';
+import { filteredConfig } from '../config';
 import { noop } from '../util';
 
 type Options = {
@@ -96,7 +96,7 @@ export default function(
 				styles.push('<link rel="stylesheet" href="/dashboard/css/dialog-defaults.css">');
 			}
 		} else if (resourceType === 'graphic') {
-			if (config.sentry && config.sentry.enabled) {
+			if (global.sentryEnabled) {
 				scripts.unshift('<script src="/sentry.js" type="module"></script>');
 			}
 

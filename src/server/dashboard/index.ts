@@ -18,6 +18,7 @@ type DashboardContext = {
 	publicConfig: typeof filteredConfig;
 	privateConfig: typeof config;
 	workspaces: Workspace[];
+	sentryEnabled: boolean;
 };
 
 type Workspace = {
@@ -153,6 +154,7 @@ function getDashboardContext(): DashboardContext {
 		publicConfig: filteredConfig,
 		privateConfig: config,
 		workspaces: parseWorkspaces(),
+		sentryEnabled: global.sentryEnabled,
 	};
 }
 
