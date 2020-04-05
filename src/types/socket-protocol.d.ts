@@ -54,6 +54,9 @@ export interface ProtocolDefinition extends ServerDefinition {
 					bundleName: string;
 					content: unknown;
 				};
+
+				// idk why this lib doesn't type this built-in message
+				reconnect: void;
 			};
 			// messages clients can send to the server, with a typed response
 			ClientRPCs: {
@@ -170,5 +173,5 @@ export interface ProtocolDefinition extends ServerDefinition {
 
 export type TypedServer = RootServer<ProtocolDefinition>;
 export type RootNS = ServerNamespace<ProtocolDefinition, '/'>;
-export type TypedClient = ClientSideSocket<ProtocolDefinition, '/'>;
+export type TypedClientSocket = ClientSideSocket<ProtocolDefinition, '/'>;
 export type TypedServerSocket = ServerSideClientSocket<ProtocolDefinition, '/'>;

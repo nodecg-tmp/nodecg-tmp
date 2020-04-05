@@ -24,7 +24,7 @@ export abstract class AbstractReplicant<T> extends EventEmitter {
 
 	opts: Options<T>;
 
-	revision: number;
+	revision = 0;
 
 	log: LoggerInterface;
 
@@ -40,7 +40,7 @@ export abstract class AbstractReplicant<T> extends EventEmitter {
 
 	protected _oldValue: T | undefined;
 
-	protected _operationQueue: Array<Operation<T>>;
+	protected _operationQueue: Array<Operation<T>> = [];
 
 	protected _pendingOperationFlush: boolean;
 
@@ -69,9 +69,6 @@ export abstract class AbstractReplicant<T> extends EventEmitter {
 		this.name = name;
 		this.namespace = namespace;
 		this.opts = opts;
-		this.revision = 0;
-
-		this._operationQueue = [];
 
 		// Prevents one-time change listeners from potentially being called twice.
 		// https://github.com/nodecg/nodecg/issues/296

@@ -3,14 +3,14 @@ import equal from 'deep-equal';
 import clone from 'clone';
 
 // Ours
-import { NodeCGAPIBase, AbstractLogger } from '../../shared/api.base';
-import * as shared from '../../shared/replicants.shared';
-import { Logger } from './logger';
+import { AbstractReplicant, Options, isIgnoringProxy, Operation } from '../../shared/replicants.shared';
+import createLogger from './logger';
+import { TypedClientSocket } from '../../types/socket-protocol';
 
-const declaredReplicants = {};
+const declaredReplicants = new Map<string, Map<string, ClientReplicant<any>>>();
 
 const REPLICANT_HANDLER = {
-	get(target, prop) {
+	get(target: ClientReplicant<any>, prop: keyof ClientReplicant<any>) {
 		if (prop === 'value' && target.status !== 'declared') {
 			target.log.warn(
 				'Attempted to get value before Replicant had finished declaring. ' +
@@ -21,120 +21,58 @@ const REPLICANT_HANDLER = {
 		return target[prop];
 	},
 
-	set(target, prop, newValue) {
-		if (prop !== 'value' || shared.isIgnoringProxy(target)) {
-			target[prop] = newValue;
+	set(target: ClientReplicant<any>, prop: keyof ClientReplicant<any>, newValue: any) {
+		if (prop !== 'value' || isIgnoringProxy(target as any)) {
+			(target as any)[prop] = newValue;
 			return true;
 		}
 
 		if (newValue === target[prop]) {
-			target.log.replicants('value unchanged, no action will be taken');
 			return true;
 		}
 
 		target.validate(newValue);
 		target.log.replicants('running setter with', newValue);
-		target._addOperation('/', 'overwrite', {
-			newValue: clone(newValue),
+		target._addOperation({
+			path: '/',
+			method: 'overwrite',
+			args: { newValue: clone(newValue) },
 		});
 		return true;
 	},
 };
 
-class Replicant extends NodeCGAPIBase {
-	get Logger(): new (name: string) => AbstractLogger {
-		return Logger;
-	}
+export default class ClientReplicant<T> extends AbstractReplicant<T> {
+	value: T | undefined = undefined;
 
-	get log(): AbstractLogger {
-		if (this._memoizedLogger) {
-			return this._memoizedLogger;
-		}
+	/**
+	 * When running in the browser, we have to wait until the socket joins the room
+	 * and the replicant is fully declared before running any additional commands.
+	 * After this time, commands do not need to be added to the queue and are simply executed immediately.
+	 */
+	private _actionQueue: Array<{ fn: (...args: any[]) => void; args?: any[] }> = [];
 
-		this._memoizedLogger = new Logger(this.bundleName);
-		return this._memoizedLogger;
-	}
+	private readonly _socket: TypedClientSocket;
 
-	get config(): typeof filteredConfig {
-		return JSON.parse(JSON.stringify(filteredConfig));
-	}
-
-	constructor(name: string, namespace: string, opts, socket) {
-		if (!name || typeof name !== 'string') {
-			throw new Error('Must supply a name when instantiating a Replicant');
-		}
-
-		if (!namespace || typeof namespace !== 'string') {
-			throw new Error('Must supply a namespace when instantiating a Replicant');
-		}
-
-		super();
+	constructor(name: string, namespace: string, opts: Options<T>, socket: TypedClientSocket) {
+		super(name, namespace, opts);
 
 		// Load logger
-		this.log = require('./logger')(`Replicant/${namespace}.${name}`);
+		this.log = createLogger(`Replicant/${namespace}.${name}`);
 
 		// If replicant already exists, return that.
-		if ({}.hasOwnProperty.call(declaredReplicants, namespace)) {
-			if ({}.hasOwnProperty.call(declaredReplicants[namespace], name)) {
-				this.log.replicants('Existing replicant found, returning that instead of creating a new one.');
-				return declaredReplicants[namespace][name]; // eslint-disable-line no-constructor-return
+		const nsp = declaredReplicants.get(namespace);
+		if (nsp) {
+			const existing = nsp.get(name);
+			if (existing) {
+				existing.log.replicants('Existing replicant found, returning that instead of creating a new one.');
+				return existing;
 			}
 		} else {
-			declaredReplicants[namespace] = {};
+			declaredReplicants.set(namespace, new Map());
 		}
 
-		opts = opts || {};
-		this.value = undefined;
-		this.name = name;
-		this.namespace = namespace;
-		this.opts = opts;
-		this.revision = 0;
-		this.status = 'undeclared';
 		this._socket = socket;
-
-		if (typeof opts.persistent === 'undefined') {
-			opts.persistent = true;
-		}
-
-		if (typeof opts.persistenceInterval === 'undefined') {
-			opts.persistenceInterval = shared.DEFAULT_PERSISTENCE_INTERVAL;
-		}
-
-		// Prevents one-time change listeners from potentially being called twice.
-		// https://github.com/nodecg/nodecg/issues/296
-		const originalOnce = this.once.bind(this);
-		this.once = (event, listener) => {
-			if (event === 'change' && this.status === 'declared') {
-				return listener(this.value);
-			}
-
-			return originalOnce(event, listener);
-		};
-
-		/* When a new "change" listener is added, chances are that the developer wants it to be initialized ASAP.
-		 * However, if this Replicant has already been declared previously in this context, their "change"
-		 * handler will *not* get run until another change comes in, which may never happen for Replicants
-		 * that change very infrequently.
-		 * To resolve this, we immediately invoke all new "change" handlers if appropriate.
-		 */
-		this.on('newListener', (event, listener) => {
-			if (event === 'change' && this.status === 'declared') {
-				listener(this.value);
-			}
-		});
-
-		/* When running in the browser, we have to wait until the socket joins the room
-		 * and the replicant is fully declared before running any additional commands.
-		 * After this time, commands do not need to be added to the queue and are simply executed immediately.
-		 */
-		this._actionQueue = [];
-
-		this._operationQueue = [];
-
-		// Assign a stub so that the function can still be freely called even if there's no schema. Less checking to do.
-		this.validate = function() {
-			return true;
-		};
 
 		// Initialize the Replicant.
 		this._declare();
@@ -146,8 +84,21 @@ class Replicant extends NodeCGAPIBase {
 		socket.on('reconnect', () => this._declare());
 
 		const thisProxy = new Proxy(this, REPLICANT_HANDLER);
-		declaredReplicants[namespace][name] = thisProxy;
-		return thisProxy; // eslint-disable-line no-constructor-return
+		declaredReplicants.get(namespace)!.set(name, thisProxy);
+		return thisProxy;
+	}
+
+	/**
+	 * A map of all Replicants declared in this context. Top-level keys are namespaces,
+	 * child keys are Replicant names.
+	 */
+	static get declaredReplicants(): { [k: string]: { [k: string]: ClientReplicant<unknown> } } {
+		const foo: { [k: string]: { [k: string]: ClientReplicant<unknown> } } = {};
+		for (const [key, nsp] of declaredReplicants) {
+			foo[key] = Object.fromEntries(Object.entries(nsp));
+		}
+
+		return foo;
 	}
 
 	/**
@@ -157,18 +108,13 @@ class Replicant extends NodeCGAPIBase {
 	 * @param args {array} - The arguments provided to this operation
 	 * @private
 	 */
-	_addOperation(path, method, args) {
-		this._operationQueue.push({
-			path,
-			method,
-			args,
-		});
-
+	_addOperation(operation: Operation<T>): void {
+		this._operationQueue.push(operation);
 		if (!this._pendingOperationFlush) {
 			this._pendingOperationFlush = true;
 
 			if (this.status === 'declared') {
-				process.nextTick(() => this._flushOperations());
+				setTimeout(() => this._flushOperations(), 0);
 			} else {
 				this._queueAction(this._flushOperations);
 			}
@@ -179,7 +125,7 @@ class Replicant extends NodeCGAPIBase {
 	 * Emits all queued operations via Socket.IO & empties this._operationQueue.
 	 * @private
 	 */
-	_flushOperations() {
+	_flushOperations(): void {
 		this._pendingOperationFlush = false;
 		this._socket.emit(
 			'replicant:proposeOperations',
@@ -191,13 +137,13 @@ class Replicant extends NodeCGAPIBase {
 				schemaSum: this.schemaSum,
 				opts: this.opts,
 			},
-			data => {
-				if (data.schema) {
+			(rejectReason, data) => {
+				if (data?.schema) {
 					this.schema = data.schema;
 					this.schemaSum = data.schemaSum;
 				}
 
-				if (data.revision && data.revision !== this.revision) {
+				if (data && data.revision !== this.revision) {
 					this.log.warn(
 						'Not at head revision (ours %s, theirs %s). Change aborted & head revision applied.',
 						this.revision,
@@ -206,11 +152,11 @@ class Replicant extends NodeCGAPIBase {
 					this._assignValue(data.value, data.revision);
 				}
 
-				if (data.rejectReason) {
+				if (rejectReason) {
 					if (this.listenerCount('operationsRejected') > 0) {
-						this.emit('operationsRejected', data.rejectReason);
+						this.emit('operationsRejected', rejectReason);
 					} else {
-						return this.log.error(data.rejectReason);
+						return this.log.error(rejectReason);
 					}
 				}
 			},
@@ -224,7 +170,7 @@ class Replicant extends NodeCGAPIBase {
 	 * @param args
 	 * @private
 	 */
-	_queueAction(fn, args) {
+	private _queueAction(fn: (...args: any[]) => void, args?: any[]): void {
 		this._actionQueue.push({
 			fn,
 			args,
@@ -235,7 +181,7 @@ class Replicant extends NodeCGAPIBase {
 	 * Emits "declareReplicant" via the socket.
 	 * @private
 	 */
-	_declare() {
+	private _declare(): void {
 		if (this.status === 'declared' || this.status === 'declaring') {
 			return;
 		}
@@ -249,13 +195,17 @@ class Replicant extends NodeCGAPIBase {
 					namespace: this.namespace,
 					opts: this.opts,
 				},
-				data => {
-					if (data.rejectReason) {
+				(rejectReason, data) => {
+					if (rejectReason) {
 						if (this.listenerCount('declarationRejected') > 0) {
-							this.emit('declarationRejected', data.rejectReason);
+							this.emit('declarationRejected', rejectReason);
 						} else {
-							throw new Error(data.rejectReason);
+							throw new Error(rejectReason);
 						}
+					}
+
+					if (!data) {
+						throw new Error('data unexpectedly falsey');
 					}
 
 					this.log.replicants(
@@ -274,10 +224,10 @@ class Replicant extends NodeCGAPIBase {
 						this._assignValue(data.value, data.revision);
 					}
 
-					if (data.schema) {
+					if ('schema' in data) {
 						this.schema = data.schema;
 						this.schemaSum = data.schemaSum;
-						this.validate = shared.generateValidator(this);
+						this.validate = this._generateValidator();
 					}
 
 					// Let listeners know that this Replicant has been successfully declared.
@@ -312,9 +262,9 @@ class Replicant extends NodeCGAPIBase {
 	 * @param revision {number} - The new revision number.
 	 * @private
 	 */
-	_assignValue(newValue, revision) {
+	private _assignValue(newValue: T, revision: number): void {
 		const oldValue = clone(this.value);
-		shared.applyOperation(this, {
+		this._applyOperation({
 			path: '/',
 			method: 'overwrite',
 			args: { newValue },
@@ -333,7 +283,12 @@ class Replicant extends NodeCGAPIBase {
 	 * @param data {object} - A record of operations to perform.
 	 * @private
 	 */
-	_handleOperations(data) {
+	private _handleOperations(data: {
+		name: string;
+		namespace: string;
+		revision: number;
+		operations: Array<Operation<any>>;
+	}): void {
 		if (this.status !== 'declared') {
 			return;
 		}
@@ -358,13 +313,13 @@ class Replicant extends NodeCGAPIBase {
 
 		const oldValue = clone(this.value);
 		data.operations.forEach(operation => {
-			operation.result = shared.applyOperation(this, operation);
+			this._applyOperation(operation as any);
 		});
 		this.revision = data.revision;
 		this.emit('change', this.value, oldValue, data.operations);
 	}
 
-	_handleDisconnect() {
+	private _handleDisconnect(): void {
 		this.status = 'undeclared';
 		this._operationQueue.length = 0;
 		this._actionQueue.length = 0;
@@ -374,20 +329,10 @@ class Replicant extends NodeCGAPIBase {
 	 * Requests the latest value from the Replicator, discarding the local value.
 	 * @private
 	 */
-	_fullUpdate() {
-		NodeCG.readReplicant(this.name, this.namespace, data => {
+	private _fullUpdate(): void {
+		(window as any).NodeCG.readReplicant(this.name, this.namespace, (data: any) => {
 			this.emit('fullUpdate', data);
 			this._assignValue(data.value, data.revision);
 		});
 	}
-
-	/**
-	 * A map of all Replicants declared in this context. Top-level keys are namespaces,
-	 * child keys are Replicant names.
-	 */
-	static get declaredReplicants() {
-		return declaredReplicants;
-	}
 }
-
-module.exports = Replicant;
