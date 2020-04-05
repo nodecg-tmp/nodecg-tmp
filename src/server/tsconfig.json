@@ -11,5 +11,6 @@
 		"../types/**/*.d.ts",
 		"../shared/replicants.shared.ts",
 		"../../node_modules/joi-extract-type/dist/index.d.ts"
-	]
+	],
+	"references": [{ "path": "../shared" }]
 }

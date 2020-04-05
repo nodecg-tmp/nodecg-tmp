@@ -10,7 +10,7 @@ import express from 'express';
 import { config } from '../config';
 import bundleManager, { all as getAllBundles } from '../bundle-manager';
 import { authCheck } from '../util';
-import * as pjson from '../../../package.json';
+const pjson = require('../../package.json'); // eslint-disable-line @typescript-eslint/no-var-requires
 
 export const bundleMetadata: Array<{ name: string; git: NodeCG.Bundle.GitData; version: string }> = [];
 export const app = express();

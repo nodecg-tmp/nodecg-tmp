@@ -1,15 +1,9 @@
-export const enum Code {
-	CredentialsBadFormat = 'credentials_bad_format',
-	CredentialsRequired = 'credentials_required',
-	InternalError = 'internal_error',
-	InvalidToken = 'invalid_token',
-	TokenRevoked = 'token_invalidated',
-}
+import { UnAuthErrCode } from '../../types/socket-protocol';
 
 export default class UnauthorizedError extends Error {
-	serialized: { message: string; code: Code; type: 'UnauthorizedError' };
+	serialized: { message: string; code: UnAuthErrCode; type: 'UnauthorizedError' };
 
-	constructor(code: Code, message: string) {
+	constructor(code: UnAuthErrCode, message: string) {
 		super(message);
 		this.message = message;
 		this.serialized = {

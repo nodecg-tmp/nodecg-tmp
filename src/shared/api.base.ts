@@ -1,5 +1,5 @@
 // Ours
-import { version } from '../../package.json';
+const { version } = require('../../package.json');
 import { AbstractReplicant, Options } from './replicants.shared';
 
 export type AbstractLogger = {

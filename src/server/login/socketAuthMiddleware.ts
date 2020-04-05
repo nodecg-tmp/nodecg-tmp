@@ -5,8 +5,8 @@ import SocketIO from 'socket.io';
 import { getConnection, ApiKey } from '../database';
 import { isSuperUser } from '../database/utils';
 import { config } from '../config';
-import UnauthorizedError, { Code as UnauthErrCode } from '../login/UnauthorizedError';
-import { TypedServerSocket } from '../../types/socket-protocol';
+import UnauthorizedError from '../login/UnauthorizedError';
+import { TypedServerSocket, UnAuthErrCode } from '../../types/socket-protocol';
 
 const socketsByKey = new Map<string, Set<TypedServerSocket>>();
 
@@ -103,7 +103,7 @@ export default async function(socket: TypedServerSocket, next: SocketIO.NextFunc
 
 						s.emit(
 							'error',
-							new UnauthorizedError(UnauthErrCode.TokenRevoked, 'This token has been invalidated')
+							new UnauthorizedError(UnAuthErrCode.TokenRevoked, 'This token has been invalidated')
 								.serialized,
 						);
 						s.disconnect(true);

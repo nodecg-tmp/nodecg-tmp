@@ -16,7 +16,7 @@ import exitHook from 'exit-hook';
 import fetch from 'make-fetch-happen';
 
 // Ours
-import * as pjson from '../../package.json';
+const pjson = require('../../package.json'); // eslint-disable-line @typescript-eslint/no-var-requires
 import NodeCGServer from './server';
 
 process.title = 'NodeCG';
@@ -34,10 +34,10 @@ if (!process.env.NODECG_ROOT) {
 }
 
 const nodeVersion = process.versions.node;
-process.title += ` - ${pjson.version}`;
+process.title += ` - ${String(pjson.version)}`;
 
 if (!semver.satisfies(nodeVersion, pjson.engines.node)) {
-	console.error(`ERROR: NodeCG requires Node.js ${pjson.engines.node}`);
+	console.error(`ERROR: NodeCG requires Node.js ${String(pjson.engines.node)}`);
 	console.error(`       Your Node.js version: v${nodeVersion}`);
 	process.exit(1);
 }

@@ -9,8 +9,15 @@ import {
 } from 'typed-socket.io';
 
 // Ours
-import { Code as UnAuthErrCode } from '../server/login/UnauthorizedError';
 import { Operation as ReplicantOperation, Options as ReplicantOptions } from '../shared/replicants.shared';
+
+export const enum UnAuthErrCode {
+	CredentialsBadFormat = 'credentials_bad_format',
+	CredentialsRequired = 'credentials_required',
+	InternalError = 'internal_error',
+	InvalidToken = 'invalid_token',
+	TokenRevoked = 'token_invalidated',
+}
 
 type ProtocolError = {
 	message: string;
