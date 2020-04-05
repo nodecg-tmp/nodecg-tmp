@@ -35,6 +35,8 @@ export default class AssetManager {
 	private readonly _replicator: Replicator;
 
 	constructor(replicator: Replicator) {
+		this._replicator = replicator;
+
 		// Create assetsRoot folder if it does not exist.
 		/* istanbul ignore next: Simple directory creation. */
 		if (!fs.existsSync(this.assetsRoot)) {
@@ -49,7 +51,6 @@ export default class AssetManager {
 		const { watchPatterns } = this._computeCollections(bundlesLib.all());
 		this._setupWatcher(watchPatterns);
 		this.app = this._setupExpress();
-		this._replicator = replicator;
 	}
 
 	private _computeCollections(bundles: NodeCG.Bundle[]): { collections: Collection[]; watchPatterns: Set<string> } {

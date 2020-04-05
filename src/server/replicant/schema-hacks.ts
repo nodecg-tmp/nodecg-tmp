@@ -71,7 +71,7 @@ export default function replaceRefs(inputObj: unknown, currentFile: File, allFil
 
 			// Crawl this POJO or Array, looking for nested JSON References
 			for (const value of Object.values(dereferencedData)) {
-				replaceRefs(value, currentFile, allFiles);
+				replaceRefs(value, referenceFile, allFiles);
 			}
 		}
 	}
