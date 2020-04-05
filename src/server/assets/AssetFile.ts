@@ -3,7 +3,7 @@ import * as path from 'path';
 
 const ASSETS_ROOT = path.join(process.env.NODECG_ROOT, 'assets');
 
-export default class AssetFile {
+export default class AssetFile implements NodeCG.AssetFile {
 	sum: string;
 
 	base: string;

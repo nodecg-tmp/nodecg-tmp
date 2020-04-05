@@ -15,30 +15,10 @@ import ServerReplicant from './replicant/server-replicant';
 
 const log = createLogger('sounds');
 
-type CueFile = {
-	sum: string;
-	base: string;
-	ext: string;
-	name: string;
-	url: string;
-	default: boolean;
-} | null;
-
-type SoundCue = {
-	name: string;
-	volume: number;
-	file: CueFile;
-	assignable: boolean;
-	channels?: number;
-	bundleName?: TemplateStringsArray;
-	defaultVolume?: number | null;
-	defaultFile?: CueFile;
-};
-
 export default class SoundsLib {
 	app = express();
 
-	private readonly _cueRepsByBundle = new Map<string, ServerReplicant<SoundCue[]>>();
+	private readonly _cueRepsByBundle = new Map<string, ServerReplicant<NodeCG.SoundCue[]>>();
 
 	constructor(replicator: Replicator) {
 		// Create the replicant for the "Master Fader"
@@ -50,7 +30,7 @@ export default class SoundsLib {
 				// Create an array replicant that will hold all this bundle's sound cues.
 				const defaultCuesRepValue = _makeCuesRepDefaultValue(bundle);
 
-				const cuesRep = replicator.declare<SoundCue[]>('soundCues', bundle.name, {
+				const cuesRep = replicator.declare<NodeCG.SoundCue[]>('soundCues', bundle.name, {
 					schemaPath: path.resolve(appRootPath.path, 'schemas/soundCues.json'),
 					defaultValue: [],
 				});
@@ -140,10 +120,10 @@ function _serveDefault(req: express.Request, res: express.Response): void {
 	});
 }
 
-function _makeCuesRepDefaultValue(bundle: NodeCG.Bundle): SoundCue[] {
-	const formattedCues: SoundCue[] = [];
+function _makeCuesRepDefaultValue(bundle: NodeCG.Bundle): NodeCG.SoundCue[] {
+	const formattedCues: NodeCG.SoundCue[] = [];
 	for (const rawCue of bundle.soundCues) {
-		let file: CueFile | null = null;
+		let file: NodeCG.CueFile | null = null;
 		if (rawCue.defaultFile) {
 			const filepath = path.join(bundle.dir, rawCue.defaultFile);
 			const parsedPath = path.parse(filepath);

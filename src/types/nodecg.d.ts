@@ -205,4 +205,33 @@ declare namespace NodeCG {
 			enabled: boolean;
 		};
 	};
+
+	export type CueFile = {
+		sum: string;
+		base: string;
+		ext: string;
+		name: string;
+		url: string;
+		default: boolean;
+	} | null;
+
+	export type SoundCue = {
+		name: string;
+		volume: number;
+		file: CueFile;
+		assignable: boolean;
+		channels?: number;
+		bundleName?: TemplateStringsArray;
+		defaultVolume?: number | null;
+		defaultFile?: CueFile;
+	};
+
+	export interface AssetFile {
+		sum: string;
+		base: string;
+		ext: string;
+		name: string;
+		namespace: string;
+		url: string;
+	}
 }
