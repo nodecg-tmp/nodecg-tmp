@@ -262,30 +262,33 @@ export default class NodeCGServer extends EventEmitter {
 		// This has two benefits:
 		// 1) Prevents the dashboard/views from being opened before everything has finished loading
 		// 2) Prevents dashboard/views from re-declaring replicants on reconnect before extensions have had a chance
-		server.listen(
-			{
-				host: config.host,
-				port: process.env.NODECG_TEST ? undefined : config.port,
-			},
-			() => {
-				if (process.env.NODECG_TEST) {
-					const addrInfo = server.address();
-					if (typeof addrInfo !== 'object' || addrInfo === null) {
-						throw new Error("couldn't get port number");
+		return new Promise(resolve => {
+			server.listen(
+				{
+					host: config.host,
+					port: process.env.NODECG_TEST ? undefined : config.port,
+				},
+				() => {
+					if (process.env.NODECG_TEST) {
+						const addrInfo = server.address();
+						if (typeof addrInfo !== 'object' || addrInfo === null) {
+							throw new Error("couldn't get port number");
+						}
+
+						const { port } = addrInfo;
+						log.warn(`Test mode active, using automatic listen port: ${port}`);
+						config.port = port;
+						filteredConfig.port = port;
+						process.env.NODECG_TEST_PORT = String(port);
 					}
 
-					const { port } = addrInfo;
-					log.warn(`Test mode active, using automatic listen port: ${port}`);
-					config.port = port;
-					filteredConfig.port = port;
-					process.env.NODECG_TEST_PORT = String(port);
-				}
-
-				const protocol = config.ssl && config.ssl.enabled ? 'https' : 'http';
-				log.info('NodeCG running on %s://%s', protocol, config.baseURL);
-				this.emit('started');
-			},
-		);
+					const protocol = config.ssl && config.ssl.enabled ? 'https' : 'http';
+					log.info('NodeCG running on %s://%s', protocol, config.baseURL);
+					this.emit('started');
+					resolve();
+				},
+			);
+		});
 	}
 
 	async stop(): Promise<void> {
