@@ -82,6 +82,8 @@ export default class NodeCGServer extends EventEmitter {
 	constructor() {
 		super();
 
+		this.mount = this.mount.bind(this);
+
 		/**
 		 * HTTP(S) server setup
 		 */

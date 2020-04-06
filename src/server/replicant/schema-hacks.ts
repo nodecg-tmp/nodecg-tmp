@@ -1,3 +1,5 @@
+/* eslint-disable @typescript-eslint/prefer-for-of */
+
 // Packages
 import clone from 'clone';
 import ptr from 'json-ptr';
@@ -70,14 +72,20 @@ export default function replaceRefs(inputObj: unknown, currentFile: File, allFil
 			}
 
 			// Crawl this POJO or Array, looking for nested JSON References
-			for (const value of Object.values(dereferencedData)) {
+			const keys = Object.keys(dereferencedData);
+			for (let i = 0; i < keys.length; i++) {
+				const key = keys[i];
+				const value = obj[key];
 				replaceRefs(value, referenceFile, allFiles);
 			}
 		}
 	}
 
 	// Crawl this POJO or Array, looking for nested JSON References
-	for (const value of Object.values(obj)) {
+	const keys = Object.keys(obj);
+	for (let i = 0; i < keys.length; i++) {
+		const key = keys[i];
+		const value = obj[key];
 		replaceRefs(value, currentFile, allFiles);
 	}
 
