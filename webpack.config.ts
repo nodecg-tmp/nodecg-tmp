@@ -43,6 +43,9 @@ const config: webpack.Configuration = {
 			'src/client/manifest.json',
 			'src/client/favicon.ico',
 			{ from: 'src/client/dashboard/img/', to: 'dashboard/img', toType: 'dir' },
+			{ from: 'src/client/dashboard/css/', to: 'dashboard/css', toType: 'dir' },
+			{ from: 'src/client/dashboard/js/', to: 'dashboard/js', toType: 'dir' },
+			{ from: 'src/client/instance/', to: 'instance', toType: 'dir' },
 		]),
 	],
 };

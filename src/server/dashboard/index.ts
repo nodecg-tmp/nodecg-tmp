@@ -62,11 +62,7 @@ export default class DashboardLib {
 		});
 
 		app.get('/nodecg-api.min.js', (_, res) => {
-			res.sendFile(path.join(process.env.NODECG_TEST ? INSTRUMENTED_PATH : BUILD_PATH, 'nodecg-api.min.js'));
-		});
-
-		app.get('/nodecg-api.min.js.map', (_, res) => {
-			res.sendFile(path.join(process.env.NODECG_TEST ? INSTRUMENTED_PATH : BUILD_PATH, 'nodecg-api.min.js.map'));
+			res.sendFile(path.join(process.env.NODECG_TEST ? INSTRUMENTED_PATH : BUILD_PATH, 'api.js'));
 		});
 
 		if (process.env.NODECG_TEST) {
