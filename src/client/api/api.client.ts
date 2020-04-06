@@ -146,7 +146,7 @@ export class NodeCGAPIClient extends NodeCGAPIBase {
 	}
 
 	static Replicant<T>(name: string, namespace: string, opts: ReplicantOptions<T>): ClientReplicant<T> {
-		return new ClientReplicant<T>(name, namespace, opts, this.socket);
+		return new ClientReplicant<T>(name, namespace, opts, (window as any).socket);
 	}
 
 	/* eslint-disable no-dupe-class-members */

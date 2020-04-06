@@ -62,11 +62,7 @@ export default class ServerReplicant<T> extends AbstractReplicant<T> {
 			if (fs.existsSync(absoluteSchemaPath)) {
 				try {
 					const rawSchema = $RefParser.readSync(absoluteSchemaPath);
-					const parsedSchema = replaceRefs(
-						rawSchema.root,
-						rawSchema.rootFile,
-						rawSchema.files,
-					);
+					const parsedSchema = replaceRefs(rawSchema.root, rawSchema.rootFile, rawSchema.files);
 					if (!parsedSchema) {
 						throw new Error('parsed schema was unexpectedly undefined');
 					}
@@ -77,10 +73,7 @@ export default class ServerReplicant<T> extends AbstractReplicant<T> {
 				} catch (e) {
 					/* istanbul ignore next */
 					if (!process.env.NODECG_TEST) {
-						this.log.error(
-							'Schema could not be loaded, are you sure that it is valid JSON?\n',
-							e.stack,
-						);
+						this.log.error('Schema could not be loaded, are you sure that it is valid JSON?\n', e.stack);
 					}
 				}
 			}

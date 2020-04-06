@@ -5,7 +5,7 @@ import '@polymer/paper-styles/element-styles/paper-material-styles.js';
 import '@polymer/paper-styles/typography.js';
 import { afterNextRender } from '@polymer/polymer/lib/utils/render-status.js';
 import * as Polymer from '@polymer/polymer';
-import {iframeResizer} from 'iframe-resizer'
+import { iframeResizer } from 'iframe-resizer';
 /* global Raven */
 
 const HEX_PARSE_SHORTHAND_REGEX = /^#?([a-f\d])([a-f\d])([a-f\d])$/i;

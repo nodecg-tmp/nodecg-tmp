@@ -6,7 +6,7 @@ import '@polymer/paper-button/paper-button.js';
 import './ncg-graphic-instance.js';
 import * as Polymer from '@polymer/polymer';
 import { MutableData } from '@polymer/polymer/lib/mixins/mutable-data';
-import Clipboard from 'clipboard'
+import Clipboard from 'clipboard';
 
 /**
  * @customElement

@@ -1,5 +1,5 @@
-import '@webcomponents/webcomponentsjs/webcomponents-loader'
-import '@webcomponents/shadycss/apply-shim.min.js'
+import '@webcomponents/webcomponentsjs/webcomponents-loader';
+import '@webcomponents/shadycss/apply-shim.min.js';
 import '@polymer/app-layout/app-layout.js';
 import '@polymer/app-route/app-location.js';
 import '@polymer/app-route/app-route.js';
