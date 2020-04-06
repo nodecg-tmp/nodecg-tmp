@@ -77,7 +77,7 @@ function getConfigSchema(userConfig: { [k: string]: any } | null) {
 				.items(Joi.string())
 				.default(argv.bundlesPaths ?? [])
 				.description('An array of additional paths where bundles are located.'),
-		}).default(),
+		}),
 
 		login: Joi.object({
 			enabled: Joi.boolean()

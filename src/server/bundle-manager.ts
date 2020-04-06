@@ -159,7 +159,7 @@ export function init(
 				return;
 			}
 
-			if (!nodecgConfig?.bundles?.enabled?.includes(bundleFolderName)) {
+			if (nodecgConfig?.bundles?.enabled && !nodecgConfig.bundles.enabled.includes(bundleFolderName)) {
 				log.debug(`Not loading bundle ${bundleFolderName} as it is not enabled in config`);
 				return;
 			}

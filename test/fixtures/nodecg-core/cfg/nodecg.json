@@ -1,1 +1,7 @@
-{}
+{
+	"logging": {
+		"console": {
+			"level": "verbose"
+		}
+	}
+}

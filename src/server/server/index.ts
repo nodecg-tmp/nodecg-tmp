@@ -229,16 +229,23 @@ export default class NodeCGServer extends EventEmitter {
 
 		// Fallthrough error handler,
 		// Taken from https://docs.sentry.io/platforms/node/express/
-		app.use((_, res) => {
-			res.statusCode = 500;
-			if (global.sentryEnabled) {
-				// The error id is attached to `res.sentry` to be returned
-				// and optionally displayed to the user for support.
-				res.end(`${String((res as any).sentry)}\n`);
-			} else {
-				res.end('Internal error');
-			}
-		});
+		app.use(
+			(
+				_err: NodeJS.ErrnoException,
+				_req: express.Request,
+				res: express.Response,
+				_next: express.NextFunction,
+			) => {
+				res.statusCode = 500;
+				if (global.sentryEnabled) {
+					// The error id is attached to `res.sentry` to be returned
+					// and optionally displayed to the user for support.
+					res.end(`${String((res as any).sentry)}\n`);
+				} else {
+					res.end('Internal error');
+				}
+			},
+		);
 
 		// Set up "bundles" Replicant.
 		const bundlesReplicant = replicator.declare('bundles', 'nodecg', {

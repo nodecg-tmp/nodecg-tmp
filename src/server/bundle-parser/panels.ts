@@ -6,7 +6,7 @@ import * as fs from 'fs';
 import cheerio from 'cheerio';
 
 export default function(dashboardDir: string, manifest: NodeCG.Manifest): NodeCG.Bundle.Panel[] {
-	const unparsedPanels = manifest.dashboardPanels ?? [];
+	const unparsedPanels = manifest.dashboardPanels ?? undefined;
 	const bundleName = manifest.name;
 	const panels: NodeCG.Bundle.Panel[] = [];
 
@@ -30,7 +30,7 @@ export default function(dashboardDir: string, manifest: NodeCG.Manifest): NodeCG
 		return panels;
 	}
 
-	unparsedPanels.forEach((panel, index) => {
+	(unparsedPanels ?? []).forEach((panel, index) => {
 		assertRequiredProps(panel, index);
 
 		// Check if this bundle already has a panel by this name
