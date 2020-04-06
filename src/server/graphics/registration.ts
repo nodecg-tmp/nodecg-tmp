@@ -40,8 +40,8 @@ export default class RegistrationCoordinator {
 			persistent: false,
 		});
 
-		bundles.default.on('bundleChanged', this._updateInstanceStatuses);
-		bundles.default.on('gitChanged', this._updateInstanceStatuses);
+		bundles.default.on('bundleChanged', this._updateInstanceStatuses.bind(this));
+		bundles.default.on('gitChanged', this._updateInstanceStatuses.bind(this));
 
 		io.on('connection', socket => {
 			socket.on('graphic:registerSocket', (regRequest, cb) => {

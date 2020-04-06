@@ -224,7 +224,7 @@ class NcgAssetCategory extends MutableData(Polymer.PolymerElement) {
 	}
 
 	_computeAssetCategoryReplicant(categoryName, collectionName) {
-		const newRep = new NodeCG.Replicant(`assets:${categoryName}`, collectionName);
+		const newRep = NodeCG.Replicant(`assets:${categoryName}`, collectionName);
 		const oldRep = this._assetCategoryReplicant;
 		if (oldRep) {
 			oldRep.removeEventListener('change');

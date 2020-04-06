@@ -3,7 +3,7 @@ import './ncg-asset-category.js';
 import * as Polymer from '@polymer/polymer';
 import { MutableData } from '@polymer/polymer/lib/mixins/mutable-data';
 
-const collectionsRep = new NodeCG.Replicant('collections', '_assets');
+const collectionsRep = NodeCG.Replicant('collections', '_assets');
 
 class NcgAssets extends MutableData(Polymer.PolymerElement) {
 	static get template() {

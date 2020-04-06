@@ -79,7 +79,7 @@ class NcgGraphicInstanceDiff extends MutableData(Polymer.PolymerElement) {
 		super.ready();
 
 		if (!bundlesRep) {
-			bundlesRep = new NodeCG.Replicant('bundles', 'nodecg');
+			bundlesRep = NodeCG.Replicant('bundles', 'nodecg');
 			bundlesRep.setMaxListeners(99);
 		}
 

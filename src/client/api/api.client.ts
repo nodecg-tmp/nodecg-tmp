@@ -28,8 +28,6 @@ function _forwardMessageToContext(messageName: string, bundleName: string, data:
 }
 
 export class NodeCGAPIClient extends NodeCGAPIBase {
-	static Replicant = ClientReplicant;
-
 	get Logger(): new (name: string) => AbstractLogger {
 		return Logger;
 	}
@@ -145,6 +143,10 @@ export class NodeCGAPIClient extends NodeCGAPIBase {
 				this.log.error('Unhandled socket error:', err);
 			}
 		});
+	}
+
+	static Replicant<T>(name: string, namespace: string, opts: ReplicantOptions<T>): ClientReplicant<T> {
+		return new ClientReplicant<T>(name, namespace, opts, this.socket);
 	}
 
 	/* eslint-disable no-dupe-class-members */

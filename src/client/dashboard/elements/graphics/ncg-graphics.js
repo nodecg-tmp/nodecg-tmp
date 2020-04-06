@@ -47,7 +47,7 @@ class NcgGraphics extends MutableData(Polymer.PolymerElement) {
 
 	ready() {
 		super.ready();
-		const instancesRep = new NodeCG.Replicant('graphics:instances', 'nodecg');
+		const instancesRep = NodeCG.Replicant('graphics:instances', 'nodecg');
 
 		instancesRep.on('change', newVal => {
 			this._graphicInstances = newVal;
