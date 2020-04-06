@@ -51,18 +51,18 @@ export default class BundleManager extends EventEmitter {
 				"%s's package.json can no longer be found on disk, assuming the bundle has been deleted or moved",
 				bundleName,
 			);
-			module.exports.remove(bundleName);
+			this.remove(bundleName);
 			this.emit('bundleRemoved', bundleName);
 		}
 	}, 100);
 
 	private readonly _debouncedGitChangeHandler = debounce(bundleName => {
-		const bundle = module.exports.find(bundleName);
+		const bundle = this.find(bundleName);
 		if (!bundle) {
 			return;
 		}
 
-		bundle.git = parseBundleGit(bundle);
+		bundle.git = parseBundleGit(bundle.dir);
 		this.emit('gitChanged', bundle);
 	}, 250);
 
@@ -284,7 +284,7 @@ export default class BundleManager extends EventEmitter {
 	}
 
 	private _handleChange(bundleName: string): void {
-		const bundle = module.exports.find(bundleName);
+		const bundle = this.find(bundleName);
 
 		/* istanbul ignore if: It's rare for `bundle` to be undefined here, but it can happen when using black/whitelisting. */
 		if (!bundle) {
@@ -309,7 +309,7 @@ export default class BundleManager extends EventEmitter {
 					reparsedBundle = parseBundle(bundle.dir);
 				}
 
-				module.exports.add(reparsedBundle);
+				this.add(reparsedBundle);
 				this.emit('bundleChanged', reparsedBundle);
 			} catch (error) {
 				log.warn('Unable to handle the bundle "%s" change: %s', bundleName, error.message, {

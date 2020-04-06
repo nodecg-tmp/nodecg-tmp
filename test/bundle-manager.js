@@ -37,8 +37,8 @@ test.before.cb(t => {
 		},
 	};
 
-	bundleManager = require('../build/server/bundle-manager');
-	bundleManager.init(
+	const BundleManager = require('../build/server/bundle-manager').default;
+	bundleManager = new BundleManager(
 		[path.join(tempFolder, 'bundles'), path.join(tempFolder, 'custom-bundles')],
 		path.join(tempFolder, 'cfg'),
 		'0.7.0',
