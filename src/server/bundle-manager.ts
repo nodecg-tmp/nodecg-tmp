@@ -86,9 +86,10 @@ export function init(
 
 	initialized = true;
 	_cfgPath = cfgPath;
-	log.trace('Loading bundles');
 
 	bundlesPaths.forEach(bundlesPath => {
+		log.trace(`Loading bundles from ${bundlesPath}`);
+
 		// Create the "bundles" dir if it does not exist.
 		/* istanbul ignore if: We know this code works and testing it is tedious, so we don't bother to test it. */
 		if (!fs.existsSync(bundlesPath)) {
@@ -162,6 +163,8 @@ export function init(
 				log.debug(`Not loading bundle ${bundleFolderName} as it is not enabled in config`);
 				return;
 			}
+
+			log.debug(`Loading bundle ${bundleFolderName}`);
 
 			// Parse each bundle and push the result onto the bundles array
 			const bundleCfgPath = path.join(cfgPath, `${bundleFolderName}.json`);
