@@ -1,3 +1,7 @@
+// Native
+import fs from 'fs';
+import path from 'path';
+
 // Packages
 import clone from 'clone';
 import * as Joi from '@hapi/joi';
@@ -77,6 +81,10 @@ function getConfigSchema(userConfig: { [k: string]: any } | null) {
 				.items(Joi.string())
 				.default(argv.bundlesPaths ?? [])
 				.description('An array of additional paths where bundles are located.'),
+		}).default({
+			enabled: null,
+			disabled: null,
+			paths: [],
 		}),
 
 		login: Joi.object({
@@ -179,10 +187,22 @@ function getConfigSchema(userConfig: { [k: string]: any } | null) {
 	});
 }
 
-// eslint-disable-next-line @typescript-eslint/explicit-function-return-type
-export default function(cfgDir: string) {
+// eslint-disable-next-line @typescript-eslint/explicit-function-return-type, complexity
+export default function(cfgDirOrFile: string) {
+	let isDir = false;
+	try {
+		isDir = fs.lstatSync(cfgDirOrFile).isDirectory();
+	} catch (error) {
+		if (error.code !== 'ENOENT') {
+			throw error;
+		}
+	}
+
+	const cfgDir = isDir ? cfgDirOrFile : path.dirname(cfgDirOrFile);
 	const cc = cosmiconfig('nodecg', {
-		searchPlaces: ['nodecg.json', 'nodecg.yaml', 'nodecg.yml', 'nodecg.js', 'nodecg.config.js'],
+		searchPlaces: isDir
+			? ['nodecg.json', 'nodecg.yaml', 'nodecg.yml', 'nodecg.js', 'nodecg.config.js']
+			: [path.basename(cfgDirOrFile)],
 		stopDir: cfgDir,
 	});
 	const result = cc.search(cfgDir);
@@ -199,7 +219,7 @@ export default function(cfgDir: string) {
 	/**
 	 * Generate the config in two passes, because Joi is kind of weird.
 	 *
-	 * We apply aggressive defaults, but we need to do that in a separate pass
+	 * We apply defaults, but we need to do that in a separate pass
 	 * before we report validation errors.
 	 */
 	const { value: cfgWithDefaults } = schema.validate(userCfg, { abortEarly: false, allowUnknown: true });
@@ -211,14 +231,20 @@ export default function(cfgDir: string) {
 
 	const validationResult = schema.validate(cfgWithDefaults, { noDefaults: true });
 	if (validationResult.error) {
-		console.error('[nodecg] Config invalid:\n', validationResult.error.annotate());
-		return process.exit(1);
+		if (!process.env.NODECG_TEST) {
+			console.error('[nodecg] Config invalid:\n', validationResult.error.annotate());
+		}
+
+		throw new Error(validationResult.error.details[0].message);
 	}
 
 	const config: Joi.extractType<typeof schema> = validationResult.value;
 	if (!config) {
-		console.error('[nodecg] config unexpectedly undefined. This is a bug with NodeCG, not your config.');
-		return process.exit(1);
+		if (!process.env.NODECG_TEST) {
+			console.error('[nodecg] config unexpectedly undefined. This is a bug with NodeCG, not your config.');
+		}
+
+		throw new Error('config undefined');
 	}
 
 	// Create the filtered config

@@ -4,4 +4,8 @@ export default {
 	concurrency: 1,
 	timeout: '2m',
 	verbose: true,
+	environmentVariables: {
+		test: 'true',
+		NODECG_TEST: 'true',
+	},
 };

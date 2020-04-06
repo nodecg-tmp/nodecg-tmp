@@ -1,8 +1,5 @@
 /* eslint-disable ava/no-ignored-test-files */
 
-process.env.test = true;
-process.env.NODECG_TEST = true;
-
 // Native
 import * as path from 'path';
 
