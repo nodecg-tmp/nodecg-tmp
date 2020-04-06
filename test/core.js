@@ -9,7 +9,7 @@ import * as server from './helpers/server';
 server.setup();
 
 import * as C from './helpers/test-constants';
-const bundleManager = require('../lib/bundle-manager');
+const bundleManager = require('../build/server/bundle-manager');
 
 test('should load bundles which have satisfied bundle dependencies', t => {
 	const allBundles = bundleManager.all();

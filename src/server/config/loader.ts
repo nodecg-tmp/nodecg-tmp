@@ -21,7 +21,6 @@ function getConfigSchema(userConfig: { [k: string]: any } | null) {
 			.description('The port that NodeCG should listen on.'),
 
 		baseURL: Joi.string()
-			.hostname()
 			.default('')
 			.description(
 				'The URL of this instance. Used for things like cookies. Defaults to HOST:PORT. ' +
@@ -45,7 +44,7 @@ function getConfigSchema(userConfig: { [k: string]: any } | null) {
 				level: Joi.string()
 					.valid(...Object.values(LogLevel))
 					.default('info'),
-			}).required(),
+			}).default(),
 
 			file: Joi.object({
 				enabled: Joi.boolean()
@@ -58,8 +57,8 @@ function getConfigSchema(userConfig: { [k: string]: any } | null) {
 				path: Joi.string()
 					.default('logs/nodecg.log')
 					.description('The filepath to log to.'),
-			}).required(),
-		}).required(),
+			}).default(),
+		}).default(),
 
 		bundles: Joi.object({
 			enabled: Joi.array()
@@ -78,7 +77,7 @@ function getConfigSchema(userConfig: { [k: string]: any } | null) {
 				.items(Joi.string())
 				.default(argv.bundlesPaths ?? [])
 				.description('An array of additional paths where bundles are located.'),
-		}),
+		}).default(),
 
 		login: Joi.object({
 			enabled: Joi.boolean()
@@ -196,7 +195,21 @@ export default function(cfgDir: string) {
 	}
 
 	const schema = getConfigSchema(userCfg);
-	const validationResult = schema.validate(userCfg);
+
+	/**
+	 * Generate the config in two passes, because Joi is kind of weird.
+	 *
+	 * We apply aggressive defaults, but we need to do that in a separate pass
+	 * before we report validation errors.
+	 */
+	const { value: cfgWithDefaults } = schema.validate(userCfg, { abortEarly: false, allowUnknown: true });
+	cfgWithDefaults.baseURL =
+		cfgWithDefaults.baseURL ||
+		`${cfgWithDefaults.host === '0.0.0.0' ? 'localhost' : String(cfgWithDefaults.host)}:${String(
+			cfgWithDefaults.port,
+		)}`;
+
+	const validationResult = schema.validate(cfgWithDefaults, { noDefaults: true });
 	if (validationResult.error) {
 		console.error('[nodecg] Config invalid:\n', validationResult.error.annotate());
 		return process.exit(1);
@@ -208,20 +221,17 @@ export default function(cfgDir: string) {
 		return process.exit(1);
 	}
 
-	config.baseURL =
-		config.baseURL || `${config.host === '0.0.0.0' ? 'localhost' : String(config.host)}:${String(config.port)}`;
-
 	// Create the filtered config
 	const filteredConfig: NodeCG.FilteredConfig = {
 		host: config.host,
 		port: config.port,
 		baseURL: config.baseURL,
 		logging: {
-			replicants: config.logging.replicants,
-			console: config.logging.console,
+			replicants: config.logging!.replicants,
+			console: config.logging!.console!,
 			file: {
-				enabled: config.logging.file.enabled,
-				level: config.logging.file.level,
+				enabled: config.logging!.file!.enabled,
+				level: config.logging!.file!.level,
 			},
 		},
 		sentry: {
