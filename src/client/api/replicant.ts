@@ -187,7 +187,7 @@ export default class ClientReplicant<T> extends AbstractReplicant<T> {
 		}
 
 		this.status = 'declaring';
-		this._socket.emit('joinRoom', `replicant:${this.namespace}`, () => {
+		this._socket.emit('joinRoom', `replicant:${this.namespace}:${this.name}`, () => {
 			this._socket.emit(
 				'replicant:declare',
 				{

@@ -94,7 +94,7 @@ export default class Replicator {
 
 		// Listen for server-side operations
 		rep.on('operations', data => {
-			this.emitToClients(rep.namespace, 'replicant:operations', data);
+			this.emitToClients(rep, 'replicant:operations', data);
 		});
 
 		return rep;
@@ -110,7 +110,7 @@ export default class Replicator {
 		operations.forEach(operation => replicant._applyOperation(operation));
 		replicant.revision++;
 		replicant.emit('change', replicant.value, oldValue, operations);
-		this.emitToClients(replicant.namespace, 'replicant:operations', {
+		this.emitToClients(replicant, 'replicant:operations', {
 			name: replicant.name,
 			namespace: replicant.namespace,
 			revision: replicant.revision,
@@ -125,13 +125,14 @@ export default class Replicator {
 	 * @param data - The data to emit with the event.
 	 */
 	emitToClients<T extends keyof ProtocolDefinition['namespaces']['/']['ServerMessages']>(
-		namespace: string,
+		replicant: ServerReplicant<any>,
 		eventName: T,
 		data: ProtocolDefinition['namespaces']['/']['ServerMessages'][T],
 	): void {
 		// Emit to clients (in the given namespace's room) using Socket.IO
+		const namespace = `replicant:${replicant.namespace}:${replicant.name}`;
 		log.replicants('emitting %s to %s:', eventName, namespace, data);
-		this.io.to(`replicant:${namespace}`).emit(eventName, data);
+		this.io.to(namespace).emit(eventName, data);
 	}
 
 	saveAllReplicants(): void {

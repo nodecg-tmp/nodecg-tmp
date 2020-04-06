@@ -54,7 +54,7 @@ for (let i = 0; i < 2; i++) {
 		});
 
 		await dashboard.evaluate(
-			assetCategoryEl =>
+			async assetCategoryEl =>
 				new Promise(resolve => {
 					if (assetCategoryEl._successfulUploads === 1) {
 						resolve();
