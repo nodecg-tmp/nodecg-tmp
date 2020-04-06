@@ -6,6 +6,7 @@ const isDev = process.env.NODE_ENV !== 'production';
 
 const config: webpack.Configuration = {
 	mode: isDev ? 'development' : 'production',
+	devtool: 'source-map',
 	resolve: {
 		extensions: ['.ts', '.js', '.json'],
 	},

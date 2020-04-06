@@ -65,6 +65,10 @@ export default class DashboardLib {
 			res.sendFile(path.join(process.env.NODECG_TEST ? INSTRUMENTED_PATH : BUILD_PATH, 'api.js'));
 		});
 
+		app.get('/nodecg-api.min.js.map', (_, res) => {
+			res.sendFile(path.join(process.env.NODECG_TEST ? INSTRUMENTED_PATH : BUILD_PATH, 'api.js.map'));
+		});
+
 		if (process.env.NODECG_TEST) {
 			log.warn('Serving instrumented files for testing');
 			app.get('/*', (req, res, next) => {
