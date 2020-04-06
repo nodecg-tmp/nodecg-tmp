@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/restrict-template-expressions */
 'use strict';
 
 // Native
@@ -11,13 +12,14 @@ import * as test from 'ava';
 const isWindows = require('is-windows');
 
 // Ours
-const Logger = require('../lib/logger/server')({ console: { enabled: true } });
+const Logger = require('../build/server/logger/logger.server').default({ console: { enabled: true } });
 
 const tempFolder = temp.mkdirSync();
 temp.track(); // Automatically track and cleanup files at exit.
 
 let bundleManager;
 test.before.cb(t => {
+	process.env.NODECG_ROOT = tempFolder;
 	fse.copySync('test/fixtures/bundle-manager', tempFolder);
 
 	// The symlink test can't run on Windows unless run with admin privs.
@@ -35,7 +37,7 @@ test.before.cb(t => {
 		},
 	};
 
-	bundleManager = require('../lib/bundle-manager');
+	bundleManager = require('../build/server/bundle-manager');
 	bundleManager.init(
 		[path.join(tempFolder, 'bundles'), path.join(tempFolder, 'custom-bundles')],
 		path.join(tempFolder, 'cfg'),

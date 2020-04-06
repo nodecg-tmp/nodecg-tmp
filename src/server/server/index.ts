@@ -47,7 +47,7 @@ import SocketIO from 'socket.io';
 import appRootPath from 'app-root-path';
 
 // Ours
-import bundleEvents, * as bundleApi from '../bundle-manager';
+import BundleManager from '../bundle-manager';
 import createLogger from '../logger';
 import socketAuthMiddleware from '../login/socketAuthMiddleware';
 import socketApiMiddleware from './socketApiMiddleware';
@@ -61,6 +61,7 @@ import SoundsLib from '../sounds';
 import AssetManager from '../assets';
 import SharedSourcesLib from '../shared-sources';
 import ExtensionManager from './extensions';
+import SentryConfig from '../util/sentry-config';
 
 const renderTemplate = memoize((content, options) => {
 	return template(content)(options);
@@ -163,8 +164,8 @@ export default class NodeCGServer extends EventEmitter {
 
 		const bundlesPaths = [path.join(process.env.NODECG_ROOT, 'bundles')].concat(config.bundles?.paths ?? []);
 		const cfgPath = path.join(process.env.NODECG_ROOT, 'cfg');
-		bundleApi.init(bundlesPaths, cfgPath, pjson.version, config);
-		bundleApi.all().forEach(bundle => {
+		const bundleManager = new BundleManager(bundlesPaths, cfgPath, pjson.version, config);
+		bundleManager.all().forEach(bundle => {
 			// TODO: deprecate this feature once Import Maps are shipped and stable in browsers.
 			// TODO: remove this feature after Import Maps have been around a while (like a year maybe).
 			if (bundle.transformBareModuleSpecifiers) {
@@ -197,7 +198,7 @@ export default class NodeCGServer extends EventEmitter {
 		});
 
 		if (global.sentryEnabled) {
-			const sentryHelpers = await import('../util/sentry-config');
+			const sentryHelpers = new SentryConfig(bundleManager);
 			app.use(sentryHelpers.app);
 		}
 
@@ -205,22 +206,22 @@ export default class NodeCGServer extends EventEmitter {
 		const replicator = new Replicator(io, persistedReplicantEntities);
 		this._replicator = replicator;
 
-		const graphics = new GraphicsLib(io, replicator);
+		const graphics = new GraphicsLib(io, bundleManager, replicator);
 		app.use(graphics.app);
 
-		const dashboard = new DashboardLib();
+		const dashboard = new DashboardLib(bundleManager);
 		app.use(dashboard.app);
 
-		const mounts = new MountsLib();
+		const mounts = new MountsLib(bundleManager.all());
 		app.use(mounts.app);
 
-		const sounds = new SoundsLib(replicator);
+		const sounds = new SoundsLib(bundleManager.all(), replicator);
 		app.use(sounds.app);
 
-		const assets = new AssetManager(replicator);
+		const assets = new AssetManager(bundleManager.all(), replicator);
 		app.use(assets.app);
 
-		const sharedSources = new SharedSourcesLib();
+		const sharedSources = new SharedSourcesLib(bundleManager.all());
 		app.use(sharedSources.app);
 
 		if (global.sentryEnabled) {
@@ -253,15 +254,15 @@ export default class NodeCGServer extends EventEmitter {
 			persistent: false,
 		});
 		const updateBundlesReplicant = debounce(() => {
-			bundlesReplicant.value = clone(bundleApi.all());
+			bundlesReplicant.value = clone(bundleManager.all());
 		}, 100);
-		bundleEvents.on('init', updateBundlesReplicant);
-		bundleEvents.on('bundleChanged', updateBundlesReplicant);
-		bundleEvents.on('gitChanged', updateBundlesReplicant);
-		bundleEvents.on('bundleRemoved', updateBundlesReplicant);
+		bundleManager.on('init', updateBundlesReplicant);
+		bundleManager.on('bundleChanged', updateBundlesReplicant);
+		bundleManager.on('gitChanged', updateBundlesReplicant);
+		bundleManager.on('bundleRemoved', updateBundlesReplicant);
 		updateBundlesReplicant();
 
-		const extensionManager = new ExtensionManager(io, replicator, this.mount);
+		const extensionManager = new ExtensionManager(io, bundleManager, replicator, this.mount);
 		this._extensionManager = extensionManager;
 		this.emit('extensionsLoaded');
 

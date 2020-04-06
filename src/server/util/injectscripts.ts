@@ -7,7 +7,6 @@ import cheerio from 'cheerio';
 import semver from 'semver';
 
 // Ours
-import * as bundles from '../bundle-manager';
 import { filteredConfig } from '../config';
 import { noop } from '../util';
 
@@ -40,7 +39,6 @@ export default function(
 			throw err;
 		}
 
-		const bundle = bundles.find(createApiInstance?.name ?? '');
 		const $ = cheerio.load(html);
 		let scripts = [];
 		let styles = [];
@@ -85,7 +83,7 @@ export default function(
 				// To minimize breakage, we only inject the new styles if
 				// the bundle specifically lists support for v1.0.0.
 				// If it only supports v1.1.0 and on, we assume it wants the dark theme styles.
-				if (bundle && semver.satisfies('1.0.0', bundle.compatibleRange)) {
+				if (createApiInstance && semver.satisfies('1.0.0', createApiInstance.compatibleRange)) {
 					styles.push('<link rel="stylesheet" href="/dashboard/css/old-panel-defaults.css">');
 				} else {
 					styles.push('<link rel="stylesheet" href="/dashboard/css/panel-defaults.css">');
@@ -118,8 +116,8 @@ export default function(
 			const partialBundle = {
 				name: createApiInstance.name,
 				config: createApiInstance.config,
-				version: bundle ? bundle.version : undefined,
-				git: bundle ? bundle.git : undefined,
+				version: createApiInstance.version,
+				git: createApiInstance.git,
 				_hasSounds: sound,
 			};
 

@@ -8,11 +8,11 @@ import * as Sentry from '@sentry/node';
 import express from 'express';
 
 // Ours
-import * as bundles from '../bundle-manager';
 import extensionApiClassFactory from '../api.server';
 import createLogger from '../logger';
 import { Replicator } from '../replicant';
 import { RootNS } from '../../types/socket-protocol';
+import BundleManager from '../bundle-manager';
 
 type Middleware = (...handlers: express.RequestHandler[]) => void;
 
@@ -25,14 +25,17 @@ export default class ExtensionManager extends EventEmitter {
 
 	private readonly _ExtensionApi: ReturnType<typeof extensionApiClassFactory>;
 
-	constructor(io: RootNS, replicator: Replicator, mount: Middleware) {
+	private readonly _bundleManager: BundleManager;
+
+	constructor(io: RootNS, bundleManager: BundleManager, replicator: Replicator, mount: Middleware) {
 		super();
 
 		log.trace('Starting extension mounting');
+		this._bundleManager = bundleManager;
 		this._ExtensionApi = extensionApiClassFactory(io, replicator, extensions, mount);
 
 		// Prevent us from messing with other listeners of this event
-		const allBundles = bundles.all();
+		const allBundles = bundleManager.all();
 
 		// Track which bundles we know are fully loaded (extension and all)
 		const fullyLoaded = [];
@@ -95,7 +98,7 @@ export default class ExtensionManager extends EventEmitter {
 						bundle.name,
 						unsatisfiedDeps.join(', '),
 					);
-					bundles.remove(bundle.name);
+					bundleManager.remove(bundle.name);
 				});
 
 				log.error('%d bundle(s) can not be loaded because they have unsatisfied dependencies', endLen);
@@ -116,7 +119,7 @@ export default class ExtensionManager extends EventEmitter {
 			log.info('Mounted %s extension', bundle.name);
 			extensions[bundle.name] = extension;
 		} catch (err) {
-			bundles.remove(bundle.name);
+			this._bundleManager.remove(bundle.name);
 			log.warn('Failed to mount %s extension:\n', err?.stack ?? err);
 			if (global.sentryEnabled) {
 				err.message = `Failed to mount ${bundle.name} extension: ${(err?.message ?? err) as string}`;

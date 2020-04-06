@@ -6,11 +6,11 @@ import express from 'express';
 import appRootPath from 'app-root-path';
 
 // Ours
-import * as bundles from '../bundle-manager';
 import { injectScripts } from '../util';
 import { Replicator } from '../replicant';
 import ServerReplicant from '../replicant/server-replicant';
 import { RootNS, GraphicRegRequest } from '../../types/socket-protocol';
+import BundleManager from '../bundle-manager';
 
 type GraphicsInstance = {
 	ipv4: string;
@@ -32,7 +32,10 @@ export default class RegistrationCoordinator {
 
 	private readonly _instancesRep: ServerReplicant<GraphicsInstance[]>;
 
-	constructor(io: RootNS, replicator: Replicator) {
+	private readonly _bundleManager: BundleManager;
+
+	constructor(io: RootNS, bundleManager: BundleManager, replicator: Replicator) {
+		this._bundleManager = bundleManager;
 		const { app } = this;
 
 		this._instancesRep = replicator.declare('graphics:instances', 'nodecg', {
@@ -40,8 +43,8 @@ export default class RegistrationCoordinator {
 			persistent: false,
 		});
 
-		bundles.default.on('bundleChanged', this._updateInstanceStatuses.bind(this));
-		bundles.default.on('gitChanged', this._updateInstanceStatuses.bind(this));
+		bundleManager.on('bundleChanged', this._updateInstanceStatuses.bind(this));
+		bundleManager.on('gitChanged', this._updateInstanceStatuses.bind(this));
 
 		io.on('connection', socket => {
 			socket.on('graphic:registerSocket', (regRequest, cb) => {
@@ -51,14 +54,14 @@ export default class RegistrationCoordinator {
 					pathName += 'index.html';
 				}
 
-				const bundle = bundles.find(bundleName);
+				const bundle = bundleManager.find(bundleName);
 				/* istanbul ignore if: simple error trapping */
 				if (!bundle) {
 					cb(null, false);
 					return;
 				}
 
-				const graphicManifest = findGraphicManifest({ bundleName, pathName });
+				const graphicManifest = this._findGraphicManifest({ bundleName, pathName });
 
 				/* istanbul ignore if: simple error trapping */
 				if (!graphicManifest) {
@@ -107,7 +110,7 @@ export default class RegistrationCoordinator {
 			});
 
 			socket.on('graphic:requestBundleRefresh', (bundleName, cb) => {
-				const bundle = bundles.find(bundleName);
+				const bundle = bundleManager.find(bundleName);
 				if (!bundle) {
 					return cb(null);
 				}
@@ -203,13 +206,13 @@ export default class RegistrationCoordinator {
 	private _updateInstanceStatuses(): void {
 		this._instancesRep.value!.forEach(instance => {
 			const { bundleName, pathName } = instance;
-			const bundle = bundles.find(bundleName);
+			const bundle = this._bundleManager.find(bundleName);
 			/* istanbul ignore next: simple error trapping */
 			if (!bundle) {
 				return;
 			}
 
-			const graphicManifest = findGraphicManifest({ bundleName, pathName });
+			const graphicManifest = this._findGraphicManifest({ bundleName, pathName });
 			/* istanbul ignore next: simple error trapping */
 			if (!graphicManifest) {
 				return;
@@ -220,24 +223,24 @@ export default class RegistrationCoordinator {
 			instance.singleInstance = Boolean(graphicManifest.singleInstance);
 		});
 	}
-}
 
-function findGraphicManifest({
-	pathName,
-	bundleName,
-}: {
-	pathName: string;
-	bundleName: string;
-}): NodeCG.Bundle.Graphic | undefined {
-	const bundle = bundles.find(bundleName);
-	/* istanbul ignore if: simple error trapping */
-	if (!bundle) {
-		return;
+	private _findGraphicManifest({
+		pathName,
+		bundleName,
+	}: {
+		pathName: string;
+		bundleName: string;
+	}): NodeCG.Bundle.Graphic | undefined {
+		const bundle = this._bundleManager.find(bundleName);
+		/* istanbul ignore if: simple error trapping */
+		if (!bundle) {
+			return;
+		}
+
+		return bundle.graphics.find(graphic => {
+			return graphic.url === pathName;
+		});
 	}
-
-	return bundle.graphics.find(graphic => {
-		return graphic.url === pathName;
-	});
 }
 
 function calcBundleGitMismatch(bundle: NodeCG.Bundle, regRequest: GraphicRegRequest): boolean {

@@ -8,10 +8,10 @@ import express from 'express';
 import appRootPath from 'app-root-path';
 
 // Ours
-import * as bundles from '../bundle-manager';
 import { config, filteredConfig } from '../config';
 import createLogger from '../logger';
 import * as ncgUtils from '../util';
+import BundleManager from '../bundle-manager';
 
 type DashboardContext = {
 	bundles: NodeCG.Bundle[];
@@ -38,7 +38,7 @@ export default class DashboardLib {
 
 	dashboardContext: DashboardContext | null = null;
 
-	constructor() {
+	constructor(bundleManager: BundleManager) {
 		const { app } = this;
 
 		app.set('views', VIEWS_PATH);
@@ -55,7 +55,7 @@ export default class DashboardLib {
 			}
 
 			if (!this.dashboardContext) {
-				this.dashboardContext = getDashboardContext();
+				this.dashboardContext = getDashboardContext(bundleManager.all());
 			}
 
 			res.render(path.join(VIEWS_PATH, 'dashboard.tmpl'), this.dashboardContext);
@@ -93,7 +93,7 @@ export default class DashboardLib {
 
 		app.get('/bundles/:bundleName/dashboard/*', ncgUtils.authCheck, (req, res, next) => {
 			const { bundleName } = req.params;
-			const bundle = bundles.find(bundleName);
+			const bundle = bundleManager.find(bundleName);
 			if (!bundle) {
 				next();
 				return;
@@ -133,15 +133,15 @@ export default class DashboardLib {
 		});
 
 		// When a bundle changes, delete the cached dashboard context
-		bundles.default.on('bundleChanged', () => {
+		bundleManager.on('bundleChanged', () => {
 			this.dashboardContext = null;
 		});
 	}
 }
 
-function getDashboardContext(): DashboardContext {
+function getDashboardContext(bundles: NodeCG.Bundle[]): DashboardContext {
 	return {
-		bundles: bundles.all().map(bundle => {
+		bundles: bundles.map(bundle => {
 			const cleanedBundle = clone(bundle);
 			if (cleanedBundle.dashboard.panels) {
 				cleanedBundle.dashboard.panels.forEach(panel => {
@@ -153,17 +153,17 @@ function getDashboardContext(): DashboardContext {
 		}),
 		publicConfig: filteredConfig,
 		privateConfig: config,
-		workspaces: parseWorkspaces(),
+		workspaces: parseWorkspaces(bundles),
 		sentryEnabled: global.sentryEnabled,
 	};
 }
 
-function parseWorkspaces(): Workspace[] {
+function parseWorkspaces(bundles: NodeCG.Bundle[]): Workspace[] {
 	let defaultWorkspaceHasPanels = false;
 	let otherWorkspacesHavePanels = false;
 	const workspaces: Workspace[] = [];
 	const workspaceNames = new Set<string>();
-	bundles.all().forEach(bundle => {
+	bundles.forEach(bundle => {
 		bundle.dashboard.panels.forEach(panel => {
 			if (panel.dialog) {
 				return;

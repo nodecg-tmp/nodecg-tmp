@@ -11,7 +11,6 @@ import sha1File from 'sha1-file';
 // Ours
 import AssetFile from './AssetFile';
 import { authCheck, debounceName } from '../util';
-import * as bundlesLib from '../bundle-manager';
 import createLogger from '../logger';
 import Replicator from '../replicant/replicator';
 import ServerReplicant from '../replicant/server-replicant';
@@ -34,7 +33,7 @@ export default class AssetManager {
 
 	private readonly _replicator: Replicator;
 
-	constructor(replicator: Replicator) {
+	constructor(bundles: NodeCG.Bundle[], replicator: Replicator) {
 		this._replicator = replicator;
 
 		// Create assetsRoot folder if it does not exist.
@@ -48,7 +47,7 @@ export default class AssetManager {
 			persistent: false,
 		});
 
-		const { watchPatterns } = this._computeCollections(bundlesLib.all());
+		const { watchPatterns } = this._computeCollections(bundles);
 		this._setupWatcher(watchPatterns);
 		this.app = this._setupExpress();
 	}

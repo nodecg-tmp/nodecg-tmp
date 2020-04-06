@@ -5,25 +5,25 @@ import path from 'path';
 import express from 'express';
 
 // Ours
-import * as bundles from '../bundle-manager';
 import { authCheck, injectScripts } from '../util';
 import RegistrationCoordinator from './registration';
 import { Replicator } from '../replicant';
 import { RootNS } from '../../types/socket-protocol';
+import BundleManager from '../bundle-manager';
 
 export default class GraphicsLib {
 	app = express();
 
-	constructor(io: RootNS, replicator: Replicator) {
+	constructor(io: RootNS, bundleManager: BundleManager, replicator: Replicator) {
 		const { app } = this;
 
 		// Start up the registration lib, which tracks how many instances of
 		// a graphic are open, and enforces singleInstance behavior.
-		app.use(new RegistrationCoordinator(io, replicator).app);
+		app.use(new RegistrationCoordinator(io, bundleManager, replicator).app);
 
 		app.get('/bundles/:bundleName/graphics*', authCheck, (req, res, next) => {
 			const { bundleName } = req.params as { [k: string]: string };
-			const bundle = bundles.find(bundleName);
+			const bundle = bundleManager.find(bundleName);
 			if (!bundle) {
 				next();
 				return;
@@ -88,7 +88,7 @@ export default class GraphicsLib {
 		// This isn't really a graphics-specific thing, should probably be in the main server lib.
 		app.get('/bundles/:bundleName/:target(bower_components|node_modules)/*', (req, res, next) => {
 			const { bundleName } = req.params;
-			const bundle = bundles.find(bundleName);
+			const bundle = bundleManager.find(bundleName);
 			if (!bundle) {
 				next();
 				return;

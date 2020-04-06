@@ -5,16 +5,15 @@ import path from 'path';
 import express from 'express';
 
 // Ours
-import * as bundles from './bundle-manager';
 import { authCheck } from './util';
 
 export default class SharedSourcesLib {
 	app = express();
 
-	constructor() {
+	constructor(bundles: NodeCG.Bundle[]) {
 		this.app.get('/bundles/:bundleName/shared/*', authCheck, (req, res, next) => {
-			const { bundleName } = req.params;
-			const bundle = bundles.find(bundleName);
+			const { bundleName } = req.params as { [k: string]: string };
+			const bundle = bundles.find(b => b.name === bundleName);
 			if (!bundle) {
 				next();
 				return;

@@ -13,7 +13,7 @@ import { argv } from 'yargs';
 import { LogLevel } from '../../shared/logger-interface';
 
 // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
-function getConfigSchema(userConfig: { [k: string]: any } | null) {
+function getConfigSchema(userConfig: { [k: string]: any }) {
 	return Joi.object({
 		host: Joi.string()
 			.default('0.0.0.0')
@@ -206,7 +206,7 @@ export default function(cfgDirOrFile: string) {
 		stopDir: cfgDir,
 	});
 	const result = cc.search(cfgDir);
-	const userCfg = result?.config;
+	const userCfg = result?.config ?? {};
 
 	if (userCfg?.bundles?.enabled && userCfg?.bundles?.disabled) {
 		throw new Error('nodecg.json may only contain EITHER bundles.enabled OR bundles.disabled, not both.');
