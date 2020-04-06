@@ -32,7 +32,7 @@ export const setup = (nodecgConfigName = 'nodecg.json') => {
 	const NodeCGServer = require(path.resolve(__dirname, '../../build/server/server')).default;
 	let server;
 	test.before(async () => {
-		const server = new NodeCGServer();
+		server = new NodeCGServer();
 		await server.start();
 	});
 
@@ -41,6 +41,7 @@ export const setup = (nodecgConfigName = 'nodecg.json') => {
 			server.stop();
 		}
 	});
+
 	test.beforeEach(t => {
 		t.context.server = server;
 		t.context.apis = {
