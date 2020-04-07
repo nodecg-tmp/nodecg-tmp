@@ -28,6 +28,7 @@ test.serial('soundCues replicant - should generate the correct defaultValue', t 
 		{
 			name: 'name-only',
 			assignable: true,
+			defaultFile: null,
 			file: null,
 			volume: 30,
 		},
@@ -35,12 +36,14 @@ test.serial('soundCues replicant - should generate the correct defaultValue', t 
 			name: 'default-volume',
 			defaultVolume: 80,
 			assignable: true,
+			defaultFile: null,
 			file: null,
 			volume: 80,
 		},
 		{
 			name: 'non-assignable',
 			assignable: false,
+			defaultFile: null,
 			file: null,
 			volume: 30,
 		},
@@ -74,6 +77,7 @@ test.serial('soundCues replicant - should remove any persisted cues that are no 
 		{
 			name: 'persisted-cue-1',
 			assignable: true,
+			defaultFile: null,
 			file: null,
 			volume: 30,
 		},
@@ -88,12 +92,14 @@ test.serial(
 			{
 				name: 'persisted-cue-1',
 				assignable: true,
+				defaultFile: null,
 				file: null,
 				volume: 30,
 			},
 			{
 				name: 'manifest-cue-1',
 				assignable: true,
+				defaultFile: null,
 				file: null,
 				volume: 30,
 			},
@@ -124,6 +130,7 @@ test.serial(
 					name: 'default-file',
 					url: '/sound/update-cues/updated-cue/default.ogg',
 					default: true,
+					assignable: false,
 				},
 				volume: 30,
 			},
