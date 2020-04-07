@@ -47,6 +47,7 @@ const config: webpack.Configuration = {
 			{ from: 'src/client/dashboard/css/', to: 'dashboard/css', toType: 'dir' },
 			{ from: 'src/client/dashboard/js/', to: 'dashboard/js', toType: 'dir' },
 			{ from: 'src/client/instance/', to: 'instance', toType: 'dir' },
+			{ from: 'src/client/login/', to: 'login', toType: 'dir' },
 		]),
 	],
 };

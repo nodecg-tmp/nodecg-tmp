@@ -24,11 +24,14 @@ export default async function(req: express.Request, res: express.Response, next:
 		let user = req.user;
 		if (req.query.key ?? req.cookies.socketToken) {
 			const database = await getConnection();
-			const apiKey = await database
-				.getRepository(ApiKey)
-				.createQueryBuilder('apiKey')
-				.where('apiKey.secret_key = :key', { key: req.query.key ?? req.cookies.socketToken })
-				.getOne();
+			const apiKey = await database.getRepository(ApiKey).findOne(
+				{
+					secret_key: req.query.key ?? req.cookies.socketToken,
+				},
+				{
+					relations: ['user'],
+				},
+			);
 
 			// No record of this API Key found, reject the request.
 			if (!apiKey) {
@@ -63,7 +66,7 @@ export default async function(req: express.Request, res: express.Response, next:
 				req.session.returnTo = req.url;
 			}
 
-			return res.redirect('/login');
+			return res.status(403).redirect('/login');
 		}
 
 		const allowed = isSuperUser(user);
@@ -73,7 +76,11 @@ export default async function(req: express.Request, res: express.Response, next:
 			return next();
 		}
 
-		return res.sendStatus(403).end();
+		if (req.session) {
+			req.session.returnTo = req.url;
+		}
+
+		return res.status(403).redirect('/login');
 	} catch (error) {
 		next(error);
 	}

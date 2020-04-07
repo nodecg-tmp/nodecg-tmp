@@ -3,11 +3,7 @@ import { ApiKey } from './entity/ApiKey';
 
 export async function findUser(id: User['id']): Promise<User | undefined> {
 	const database = await getConnection();
-	return database
-		.getRepository(User)
-		.createQueryBuilder('user')
-		.where('user.id = :id', { id })
-		.getOne();
+	return database.getRepository(User).findOne(id, { relations: ['roles', 'identities', 'apiKeys'], cache: true });
 }
 
 export async function getSuperUserRole(): Promise<Role> {
@@ -65,9 +61,13 @@ export function isSuperUser(user: User): boolean {
 async function findRole(name: Role['name']): Promise<Role | undefined> {
 	const database = await getConnection();
 	const manager = database.manager;
-	return manager.findOne(Role, {
-		name,
-	});
+	return manager.findOne(
+		Role,
+		{
+			name,
+		},
+		{ relations: ['permissions'] },
+	);
 }
 
 async function createIdentity(identInfo: Pick<Identity, 'provider_type' | 'provider_hash'>): Promise<Identity> {
@@ -89,10 +89,13 @@ async function findIdent(
 	hash: Identity['provider_hash'],
 ): Promise<Identity | undefined> {
 	const database = await getConnection();
-	return database
-		.getRepository(Identity)
-		.createQueryBuilder('ident')
-		.where('ident.type = :type', { type })
-		.andWhere('ident.hash = :hash', { hash })
-		.getOne();
+	return database.getRepository(Identity).findOne(
+		{
+			provider_hash: hash,
+			provider_type: type,
+		},
+		{
+			relations: ['user'],
+		},
+	);
 }

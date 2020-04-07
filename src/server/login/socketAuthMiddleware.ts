@@ -15,13 +15,14 @@ export default async function(socket: TypedServerSocket, next: SocketIO.NextFunc
 		const req = (socket as any).request; // Not typed in the typed-socket.io lib for some reason.
 		const token = req.token;
 		const database = await getConnection();
-		const apiKey = await database
-			.getRepository(ApiKey)
-			.createQueryBuilder('apiKey')
-			.where('apiKey.secret_key = :key', {
-				key: token,
-			})
-			.getOne();
+		const apiKey = await database.getRepository(ApiKey).findOne(
+			{
+				secret_key: token,
+			},
+			{
+				relations: ['user'],
+			},
+		);
 
 		if (!apiKey) {
 			return next(null, false);
@@ -55,11 +56,7 @@ export default async function(socket: TypedServerSocket, next: SocketIO.NextFunc
 					// Lookup the ApiKey for this token we want to revoke.
 					const keyToDelete = await database
 						.getRepository(ApiKey)
-						.createQueryBuilder('apiKey')
-						.where('apiKey.secret_key = :key', {
-							key: token,
-						})
-						.getOne();
+						.findOne({ secret_key: token }, { relations: ['user'] });
 
 					// If there's a User associated to this key (there should be)
 					// give them a new ApiKey

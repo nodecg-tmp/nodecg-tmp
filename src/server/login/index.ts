@@ -9,6 +9,8 @@ import passport from 'passport';
 import steamStrategy from 'passport-steam';
 import { Strategy as LocalStrategy } from 'passport-local';
 import { TypeormStore } from 'connect-typeorm';
+import cookieParser from 'cookie-parser';
+import appRootPath from 'app-root-path';
 
 // Ours
 import { config } from '../config';
@@ -190,6 +192,8 @@ export async function createMiddleware(): Promise<express.Application> {
 		throw new Error("no session secret defined, can't salt sessions, not safe, aborting");
 	}
 
+	app.use(cookieParser(config.login.sessionSecret));
+
 	app.use(
 		expressSession({
 			resave: false,
@@ -210,18 +214,20 @@ export async function createMiddleware(): Promise<express.Application> {
 	app.use(passport.initialize());
 	app.use(passport.session());
 
-	app.use('/login', express.static(path.join(__dirname, 'public')));
-	app.set('views', __dirname);
+	const VIEWS_DIR = path.join(appRootPath.path, 'src/server/login/views');
+
+	app.use('/login', express.static(path.join(appRootPath.path, 'build/client/login')));
+	app.set('views', VIEWS_DIR);
 
 	app.get('/login', (req, res) => {
-		res.render('public/login.tmpl', {
+		res.render(path.join(VIEWS_DIR, 'login.tmpl'), {
 			user: req.user,
 			config,
 		});
 	});
 
 	app.get('/authError', (req, res) => {
-		res.render('public/authError.tmpl', {
+		res.render(path.join(__dirname, 'authError.tmpl'), {
 			message: req.query.message,
 			code: req.query.code,
 			viewUrl: req.query.viewUrl,
