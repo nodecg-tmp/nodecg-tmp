@@ -17,11 +17,11 @@ import BundleManager from '../bundle-manager';
 type Middleware = (...handlers: express.RequestHandler[]) => void;
 
 const log = createLogger('nodecg/lib/server/extensions');
-const extensions: { [k: string]: unknown } = {};
-const satisfiedDepNames = new WeakMap<NodeCG.Bundle, string[]>();
 
 export default class ExtensionManager extends EventEmitter {
 	readonly extensions: { [k: string]: unknown } = {};
+
+	private readonly _satisfiedDepNames = new WeakMap<NodeCG.Bundle, string[]>();
 
 	private readonly _ExtensionApi: ReturnType<typeof extensionApiClassFactory>;
 
@@ -32,7 +32,7 @@ export default class ExtensionManager extends EventEmitter {
 
 		log.trace('Starting extension mounting');
 		this._bundleManager = bundleManager;
-		this._ExtensionApi = extensionApiClassFactory(io, replicator, extensions, mount);
+		this._ExtensionApi = extensionApiClassFactory(io, replicator, this.extensions, mount);
 
 		// Prevent us from messing with other listeners of this event
 		const allBundles = bundleManager.all();
@@ -57,7 +57,7 @@ export default class ExtensionManager extends EventEmitter {
 				}
 
 				// If this bundle has dependencies, and all of them are satisfied, load it and remove it from the list
-				if (_bundleDepsSatisfied(allBundles[i], fullyLoaded)) {
+				if (this._bundleDepsSatisfied(allBundles[i], fullyLoaded)) {
 					log.debug('Bundle %s has extension with satisfied dependencies', allBundles[i].name);
 
 					if (allBundles[i].hasExtension) {
@@ -85,7 +85,7 @@ export default class ExtensionManager extends EventEmitter {
 						}
 
 						/* istanbul ignore if */
-						const satisfied = satisfiedDepNames.get(bundle);
+						const satisfied = this._satisfiedDepNames.get(bundle);
 						if (satisfied?.includes(dep)) {
 							continue;
 						}
@@ -117,7 +117,7 @@ export default class ExtensionManager extends EventEmitter {
 			const extension = require(extPath)(new ExtensionApi(bundle));
 			/* eslint-enable @typescript-eslint/no-var-requires */
 			log.info('Mounted %s extension', bundle.name);
-			extensions[bundle.name] = extension;
+			this.extensions[bundle.name] = extension;
 		} catch (err) {
 			this._bundleManager.remove(bundle.name);
 			log.warn('Failed to mount %s extension:\n', err?.stack ?? err);
@@ -127,29 +127,29 @@ export default class ExtensionManager extends EventEmitter {
 			}
 		}
 	}
-}
 
-function _bundleDepsSatisfied(bundle: NodeCG.Bundle, loadedBundles: NodeCG.Bundle[]): boolean {
-	const deps = bundle.bundleDependencies;
-	if (!deps) {
-		return true;
-	}
-
-	const unsatisfiedDepNames = Object.keys(deps);
-	const arr = satisfiedDepNames.get(bundle)?.slice(0) ?? [];
-
-	loadedBundles.forEach(loadedBundle => {
-		// Find out if this loaded bundle is one of the dependencies of the bundle in question.
-		// If so, check if the version loaded satisfies the dependency.
-		const index = unsatisfiedDepNames.indexOf(loadedBundle.name);
-		if (index > -1) {
-			if (semver.satisfies(loadedBundle.version, deps[loadedBundle.name])) {
-				arr.push(loadedBundle.name);
-				unsatisfiedDepNames.splice(index, 1);
-			}
+	private _bundleDepsSatisfied(bundle: NodeCG.Bundle, loadedBundles: NodeCG.Bundle[]): boolean {
+		const deps = bundle.bundleDependencies;
+		if (!deps) {
+			return true;
 		}
-	});
 
-	satisfiedDepNames.set(bundle, arr);
-	return unsatisfiedDepNames.length === 0;
+		const unsatisfiedDepNames = Object.keys(deps);
+		const arr = this._satisfiedDepNames.get(bundle)?.slice(0) ?? [];
+
+		loadedBundles.forEach(loadedBundle => {
+			// Find out if this loaded bundle is one of the dependencies of the bundle in question.
+			// If so, check if the version loaded satisfies the dependency.
+			const index = unsatisfiedDepNames.indexOf(loadedBundle.name);
+			if (index > -1) {
+				if (semver.satisfies(loadedBundle.version, deps[loadedBundle.name])) {
+					arr.push(loadedBundle.name);
+					unsatisfiedDepNames.splice(index, 1);
+				}
+			}
+		});
+
+		this._satisfiedDepNames.set(bundle, arr);
+		return unsatisfiedDepNames.length === 0;
+	}
 }

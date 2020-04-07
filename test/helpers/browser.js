@@ -21,7 +21,7 @@ export const setup = () => {
 		// The --no-sandbox flag is required to run Headless Chrome on Travis
 		const args = IS_TRAVIS ? ['--no-sandbox'] : undefined;
 		browser = await puppeteer.launch({
-			headless: true,
+			headless: false,
 			args,
 		});
 	});

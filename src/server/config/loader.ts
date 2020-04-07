@@ -171,8 +171,8 @@ function getConfigSchema(userConfig: { [k: string]: any }) {
 				.default(userConfig?.ssl?.enabled ? null : '')
 				.description('The path to an SSL certificate file.'),
 			passphrase: Joi.string()
-				.default('')
-				.description('The passphrase for the provided key file.'),
+				.description('The passphrase for the provided key file.')
+				.optional(),
 		}).optional(),
 
 		sentry: Joi.object({
@@ -245,6 +245,10 @@ export default function(cfgDirOrFile: string) {
 		}
 
 		throw new Error('config undefined');
+	}
+
+	if (!config.login) {
+		(config as any).login = { enabled: false };
 	}
 
 	// Create the filtered config

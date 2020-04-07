@@ -370,16 +370,16 @@ const CHILD_ARRAY_HANDLER = {
 				if (process.env.BROWSER) {
 					metadata.replicant._addOperation({
 						path: metadata.path,
-						operation: prop,
+						method: prop as any,
 						args: Array.prototype.slice.call(args),
-					} as any);
+					});
 				} else {
 					ignoreProxy(replicant);
 					metadata.replicant._addOperation({
 						path: metadata.path,
-						operation: prop,
+						method: prop as any,
 						args: Array.prototype.slice.call(args),
-					} as any);
+					});
 					const retValue = (target as any)[prop].apply(target, args);
 					resumeProxy(replicant);
 

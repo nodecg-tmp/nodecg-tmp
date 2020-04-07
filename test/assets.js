@@ -47,10 +47,9 @@ for (let i = 0; i < 2; i++) {
 		const addEl = await dashboard.evaluateHandle(el => el.$.add, assetCategoryEl);
 		await addEl.click();
 		const fileInputEl = await dashboard.evaluateHandle(el => el.$.uploader.$.fileInput, assetCategoryEl);
-		fileInputEl.uploadFile(UPLOAD_SOURCE_PATH);
-
 		await new Promise(resolve => {
 			assetRep.on('change', resolve);
+			fileInputEl.uploadFile(UPLOAD_SOURCE_PATH);
 		});
 
 		await dashboard.evaluate(
