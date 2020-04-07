@@ -95,7 +95,10 @@ export default function(
 			}
 		} else if (resourceType === 'graphic') {
 			if (global.sentryEnabled) {
-				scripts.unshift('<script src="/sentry.js" type="module"></script>');
+				scripts.unshift(
+					'<script src="/node_modules/@sentry/browser/build/bundle.es6.min.js"></script>',
+					'<script src="/sentry.js"></script>',
+				);
 			}
 
 			// Graphics need to create their own socket
