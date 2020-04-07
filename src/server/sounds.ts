@@ -9,10 +9,8 @@ import appRootPath from 'app-root-path';
 
 // Ours
 import { Replicator } from './replicant';
-import createLogger from './logger';
 import ServerReplicant from './replicant/server-replicant';
-
-const log = createLogger('sounds');
+import { sendFile } from './util';
 
 export default class SoundsLib {
 	app = express();
@@ -89,7 +87,7 @@ export default class SoundsLib {
 		this.app.get('/sound/:bundleName/:cueName/default.ogg', this._serveDefault.bind(this));
 	}
 
-	private _serveDefault(req: express.Request, res: express.Response): void {
+	private _serveDefault(req: express.Request, res: express.Response, next: express.NextFunction): void {
 		const bundle = this._bundles.find(b => b.name === req.params.bundleName);
 		if (!bundle) {
 			res.status(404).send(`File not found: ${req.path}`);
@@ -108,18 +106,7 @@ export default class SoundsLib {
 		}
 
 		const fullPath = path.join(bundle.dir, cue.defaultFile);
-		res.sendFile(fullPath, (err: NodeJS.ErrnoException) => {
-			if (err) {
-				if (err.code === 'ENOENT') {
-					return res.sendStatus(404);
-				}
-
-				log.error(`Unexpected error sending file ${fullPath}`, err);
-				res.sendStatus(500);
-			}
-
-			return undefined;
-		});
+		sendFile(fullPath, res, next);
 	}
 
 	private _makeCuesRepDefaultValue(bundle: NodeCG.Bundle): NodeCG.SoundCue[] {

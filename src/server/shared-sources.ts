@@ -5,7 +5,7 @@ import path from 'path';
 import express from 'express';
 
 // Ours
-import { authCheck } from './util';
+import { authCheck, sendFile } from './util';
 
 export default class SharedSourcesLib {
 	app = express();
@@ -23,18 +23,7 @@ export default class SharedSourcesLib {
 			// Serve up files with no extra logic
 			const resName = req.params[0];
 			const fileLocation = path.join(bundle.dir, 'shared', resName);
-			res.sendFile(fileLocation, (err: any) => {
-				if (err) {
-					if (err.code === 'ENOENT') {
-						return next();
-					}
-
-					/* istanbul ignore next */
-					if (!res.headersSent) {
-						return next();
-					}
-				}
-			});
+			sendFile(fileLocation, res, next);
 		});
 	}
 }

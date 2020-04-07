@@ -5,7 +5,7 @@ import path from 'path';
 import express from 'express';
 
 // Ours
-import { authCheck, injectScripts } from '../util';
+import { authCheck, injectScripts, sendFile } from '../util';
 import RegistrationCoordinator from './registration';
 import { Replicator } from '../replicant';
 import { RootNS } from '../../types/socket-protocol';
@@ -70,18 +70,7 @@ export default class GraphicsLib {
 					html => res.send(html),
 				);
 			} else {
-				res.sendFile(fileLocation, (err: NodeJS.ErrnoException) => {
-					if (err) {
-						if (err.code === 'ENOENT') {
-							return next();
-						}
-
-						/* istanbul ignore next */
-						if (!res.headersSent) {
-							return next();
-						}
-					}
-				});
+				sendFile(fileLocation, res, next);
 			}
 		});
 
@@ -96,18 +85,7 @@ export default class GraphicsLib {
 
 			const resName = req.params[0];
 			const fileLocation = path.join(bundle.dir, req.params.target, resName);
-			res.sendFile(fileLocation, (err: NodeJS.ErrnoException) => {
-				if (err) {
-					if (err.code === 'ENOENT') {
-						return res.sendStatus(404);
-					}
-
-					/* istanbul ignore next */
-					if (!res.headersSent) {
-						return next();
-					}
-				}
-			});
+			sendFile(fileLocation, res, next);
 		});
 	}
 }

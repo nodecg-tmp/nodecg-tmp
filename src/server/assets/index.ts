@@ -10,7 +10,7 @@ import sha1File from 'sha1-file';
 
 // Ours
 import AssetFile from './AssetFile';
-import { authCheck, debounceName } from '../util';
+import { authCheck, debounceName, sendFile } from '../util';
 import createLogger from '../logger';
 import Replicator from '../replicant/replicator';
 import ServerReplicant from '../replicant/server-replicant';
@@ -221,25 +221,14 @@ export default class AssetManager {
 			authCheck,
 
 			// Send the file (or an appropriate error).
-			(req, res) => {
+			(req, res, next) => {
 				const fullPath = path.join(
 					this.assetsRoot,
 					req.params.namespace,
 					req.params.category,
 					req.params.filePath,
 				);
-				res.sendFile(fullPath, (err: NodeJS.ErrnoException) => {
-					if (err && !res.headersSent) {
-						if (err.code === 'ENOENT') {
-							return res.sendStatus(404);
-						}
-
-						this.log.error(`Unexpected error sending file ${fullPath}`, err);
-						return res.sendStatus(500);
-					}
-
-					return undefined;
-				});
+				sendFile(fullPath, res, next);
 			},
 		);
 

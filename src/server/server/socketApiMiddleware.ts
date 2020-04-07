@@ -1,6 +1,5 @@
 // Packages
 import * as SocketIO from 'socket.io';
-import * as Sentry from '@sentry/node';
 
 // Ours
 import createLogger from '../logger';

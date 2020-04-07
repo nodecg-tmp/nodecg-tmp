@@ -79,12 +79,7 @@ export default class DashboardLib {
 
 				const fp = path.join(INSTRUMENTED_PATH, resName);
 				if (fs.existsSync(fp)) {
-					return res.sendFile(fp, (err: NodeJS.ErrnoException) => {
-						/* istanbul ignore next */
-						if (err && !res.headersSent) {
-							return next();
-						}
-					});
+					return ncgUtils.sendFile(fp, res, next);
 				}
 
 				return next();
@@ -117,18 +112,7 @@ export default class DashboardLib {
 				);
 			} else {
 				const fileLocation = path.join(bundle.dashboard.dir, resName);
-				res.sendFile(fileLocation, (err: NodeJS.ErrnoException) => {
-					if (err) {
-						if (err.code === 'ENOENT') {
-							return next();
-						}
-
-						/* istanbul ignore next */
-						if (!res.headersSent) {
-							return next();
-						}
-					}
-				});
+				ncgUtils.sendFile(fileLocation, res, next);
 			}
 		});
 
