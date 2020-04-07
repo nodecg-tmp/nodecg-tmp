@@ -77,7 +77,7 @@
 				bundleVersion: nodecg.bundleVersion,
 				bundleGit: nodecg.bundleGit,
 			},
-			accepted => {
+			(error, accepted) => {
 				/* istanbul ignore if: cant cover navigates page */
 				if (accepted) {
 					window.dispatchEvent(new CustomEvent('nodecg-registration-accepted'));

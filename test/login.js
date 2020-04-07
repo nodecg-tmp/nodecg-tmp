@@ -44,7 +44,7 @@ test.serial('should logging in with hashed password', async t => {
 	t.pass();
 });
 
-test.serial.only('regenerating a token should send the user back to /login', async t => {
+test.serial('regenerating a token should send the user back to /login', async t => {
 	await logIn();
 
 	const page = await initDashboard();
@@ -91,11 +91,7 @@ test.cb('socket should deny access to bad credentials', t => {
 		t.fail();
 	});
 	socket.on('error', error => {
-		t.deepEqual(error, {
-			message: 'No authorization token was found',
-			code: 'credentials_required',
-			type: 'UnauthorizedError',
-		});
+		t.deepEqual(error, 'no credentials found');
 		t.end();
 	});
 });
@@ -114,11 +110,7 @@ test.cb('socket should deny access with bad auth header format', t => {
 		t.fail('Socket working with bad auth header');
 	});
 	socket.on('error', error => {
-		t.deepEqual(error, {
-			message: 'Format is Authorization: Bearer [token]',
-			code: 'credentials_bad_format',
-			type: 'UnauthorizedError',
-		});
+		t.deepEqual(error, 'no credentials found');
 		t.end();
 	});
 });
@@ -137,10 +129,7 @@ test.cb('socket should deny access with bad auth token in header', t => {
 		t.fail('Socket working with bad auth header');
 	});
 	socket.on('error', error => {
-		t.deepEqual(error, {
-			code: 'invalid_token',
-			type: 'UnauthorizedError',
-		});
+		t.deepEqual(error, 'no credentials found');
 		t.end();
 	});
 });

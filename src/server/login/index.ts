@@ -51,10 +51,10 @@ if (config?.login?.steam?.enabled) {
 					const roles: Role[] = [];
 					const allowed = config.login?.steam?.allowedIds?.includes(profile.id);
 					if (allowed) {
-						log.info('Granting %s (%s) access', profile.id, profile.displayName);
+						log.info('Granting "%s" (%s) access', profile.id, profile.displayName);
 						roles.push(await getSuperUserRole());
 					} else {
-						log.info('Denying %s (%s) access', profile.id, profile.displayName);
+						log.info('Denying "%s" (%s) access', profile.id, profile.displayName);
 					}
 
 					const user = await upsertUser({
@@ -161,7 +161,7 @@ if (config.login?.local?.enabled) {
 						}
 					}
 
-					log.info('%s %s access using local auth', allowed ? 'Granting' : 'Denying', username);
+					log.info('%s "%s" access using local auth', allowed ? 'Granting' : 'Denying', username);
 
 					const user = await upsertUser({
 						name: username,

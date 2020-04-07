@@ -15,14 +15,6 @@ export default async function(socket: TypedServerSocket, next: SocketIO.NextFunc
 		// Prevent console warnings when many extensions are installed
 		(socket as any).setMaxListeners(64);
 
-		socket.on('error', err => {
-			if (global.sentryEnabled) {
-				Sentry.captureException(err);
-			}
-
-			log.error(err.stack);
-		});
-
 		socket.on('message', data => {
 			log.trace(
 				'Received message %s (sent to bundle %s) with data:',

@@ -140,7 +140,7 @@ export class NodeCGAPIClient extends NodeCGAPIBase {
 				const url = [location.protocol, '//', location.host, location.pathname].join('');
 				window.location.href = `/authError?code=${err.code as string}&message=${err.message as string}&viewUrl=${url}`;
 			} else {
-				this.log.error('Unhandled socket error:', err);
+				this.log.warn('Unhandled socket error:', err);
 			}
 		});
 	}
