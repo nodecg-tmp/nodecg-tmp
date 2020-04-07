@@ -249,8 +249,19 @@ export async function createMiddleware(): Promise<express.Application> {
 	app.get('/logout', (req, res) => {
 		app.emit('logout', req.session);
 		req.session?.destroy(() => {
+			// To set a cookie on localhost, domain must be left blank
+			let domain: string | undefined = config.baseURL.replace(/:[0-9]+/, '');
+			if (domain === 'localhost') {
+				domain = undefined;
+			}
+
 			res.clearCookie('connect.sid', { path: '/' });
-			res.clearCookie('socketToken', { path: '/' });
+			res.clearCookie('io', { path: '/' });
+			res.clearCookie('socketToken', {
+				path: '/',
+				domain,
+				secure: config.ssl && config.ssl.enabled,
+			});
 			res.redirect('/login');
 		});
 	});

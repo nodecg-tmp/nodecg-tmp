@@ -3,7 +3,7 @@ import SocketIO from 'socket.io';
 
 // Ours
 import { getConnection, ApiKey } from '../database';
-import { isSuperUser } from '../database/utils';
+import { isSuperUser, findUser } from '../database/utils';
 import { config } from '../config';
 import UnauthorizedError from '../login/UnauthorizedError';
 import { TypedServerSocket, UnAuthErrCode } from '../../types/socket-protocol';
@@ -13,7 +13,7 @@ const socketsByKey = new Map<string, Set<TypedServerSocket>>();
 export default async function(socket: TypedServerSocket, next: SocketIO.NextFunction): Promise<void> {
 	try {
 		const req = (socket as any).request; // Not typed in the typed-socket.io lib for some reason.
-		const token = req.token;
+		const token = req._query.token;
 		const database = await getConnection();
 		const apiKey = await database.getRepository(ApiKey).findOne(
 			{
@@ -25,12 +25,17 @@ export default async function(socket: TypedServerSocket, next: SocketIO.NextFunc
 		);
 
 		if (!apiKey) {
-			return next(null, false);
+			return next(new UnauthorizedError(UnAuthErrCode.CredentialsRequired, 'no credentials found'));
 		}
 
-		const user = apiKey.user;
+		const user = await findUser(apiKey.user.id);
 		if (!user) {
-			return next(null, false);
+			return next(
+				new UnauthorizedError(
+					UnAuthErrCode.CredentialsRequired,
+					'no user associated with provided credentials',
+				),
+			);
 		}
 
 		// But only authed sockets can join the Authed room.
@@ -115,7 +120,11 @@ export default async function(socket: TypedServerSocket, next: SocketIO.NextFunc
 			});
 		}
 
-		return next(null, allowed);
+		if (allowed) {
+			next(null);
+		} else {
+			next(new UnauthorizedError(UnAuthErrCode.InvalidToken, 'user is not allowed'));
+		}
 	} catch (error) {
 		next(error);
 	}

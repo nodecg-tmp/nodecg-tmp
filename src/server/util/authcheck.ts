@@ -3,7 +3,7 @@ import express from 'express';
 
 // Ours
 import { getConnection, ApiKey } from '../database';
-import { isSuperUser } from '../database/utils';
+import { isSuperUser, findUser } from '../database/utils';
 import { config } from '../config';
 
 /**
@@ -43,22 +43,14 @@ export default async function(req: express.Request, res: express.Response, next:
 						domain,
 						secure: config.ssl && config.ssl.enabled,
 					});
+					res.clearCookie('connect.sid', { path: '/' });
+					res.clearCookie('io', { path: '/' });
 
 					res.redirect('/login');
 				});
 			}
 
-			user = apiKey.user;
-
-			// Set the cookie so that requests to other resources on the page
-			// can also be authenticated.
-			// This is crucial for things like OBS browser sources,
-			// where we don't have a session.
-			res.cookie('socketToken', apiKey.secret_key, {
-				path: '/',
-				domain: domain as string,
-				secure: config.ssl && config.ssl.enabled,
-			});
+			user = await findUser(apiKey.user.id);
 		}
 
 		if (!user) {
@@ -73,6 +65,16 @@ export default async function(req: express.Request, res: express.Response, next:
 		const provider = user.identities[0]?.provider_type;
 		const providerAllowed = config.login && config.login[provider]?.enabled;
 		if (req.isAuthenticated() && allowed && providerAllowed) {
+			// Set the cookie so that requests to other resources on the page
+			// can also be authenticated.
+			// This is crucial for things like OBS browser sources,
+			// where we don't have a session.
+			res.cookie('socketToken', user.apiKeys[0].secret_key, {
+				path: '/',
+				domain: domain as string,
+				secure: config.ssl && config.ssl.enabled,
+			});
+
 			return next();
 		}
 

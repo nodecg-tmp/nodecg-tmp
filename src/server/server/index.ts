@@ -121,7 +121,6 @@ export default class NodeCGServer extends EventEmitter {
 
 			this.log.error(err.stack);
 		});
-		(this._io as any).use(socketApiMiddleware);
 
 		this._server = server;
 	}
@@ -155,12 +154,14 @@ export default class NodeCGServer extends EventEmitter {
 			log.info('Login security enabled');
 			const login = await import('../login');
 			app.use(await login.createMiddleware());
-			io.use(socketAuthMiddleware);
+			(this._io as any).use(socketAuthMiddleware);
 		} else {
 			app.get('/login*', (_, res) => {
 				res.redirect('/dashboard');
 			});
 		}
+
+		(this._io as any).use(socketApiMiddleware);
 
 		const bundlesPaths = [path.join(process.env.NODECG_ROOT, 'bundles')].concat(config.bundles?.paths ?? []);
 		const cfgPath = path.join(process.env.NODECG_ROOT, 'cfg');
