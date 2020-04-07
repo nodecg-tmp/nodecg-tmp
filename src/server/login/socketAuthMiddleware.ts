@@ -110,11 +110,17 @@ export default async function(socket: TypedServerSocket, next: SocketIO.NextFunc
 						}
 
 						s.emit(
-							'error',
+							'protocol_error',
 							new UnauthorizedError(UnAuthErrCode.TokenRevoked, 'This token has been invalidated')
 								.serialized,
 						);
-						s.disconnect(true);
+
+						// We need to wait a bit before disconnecting the socket,
+						// because we need to give them time to receive the "error"
+						// message we just sent.
+						setTimeout(() => {
+							s.disconnect(true);
+						}, 500);
 					}
 
 					socketsByKey.delete(token);

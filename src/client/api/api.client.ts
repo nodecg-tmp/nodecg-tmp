@@ -136,11 +136,15 @@ export class NodeCGAPIClient extends NodeCGAPIBase {
 		});
 
 		socket.on('error', err => {
+			this.log.warn('Unhandled socket connection error:', err);
+		});
+
+		socket.on('protocol_error', err => {
 			if (err.type === 'UnauthorizedError') {
 				const url = [location.protocol, '//', location.host, location.pathname].join('');
-				window.location.href = `/authError?code=${err.code as string}&message=${err.message as string}&viewUrl=${url}`;
+				window.location.href = `/authError?code=${err.code as string}&message=${err.message}&viewUrl=${url}`;
 			} else {
-				this.log.warn('Unhandled socket error:', err);
+				this.log.error('Unhandled socket protocol error:', err);
 			}
 		});
 	}

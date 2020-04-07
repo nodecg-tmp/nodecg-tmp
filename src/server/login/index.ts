@@ -227,7 +227,7 @@ export async function createMiddleware(): Promise<express.Application> {
 	});
 
 	app.get('/authError', (req, res) => {
-		res.render(path.join(__dirname, 'authError.tmpl'), {
+		res.render(path.join(VIEWS_DIR, 'authError.tmpl'), {
 			message: req.query.message,
 			code: req.query.code,
 			viewUrl: req.query.viewUrl,

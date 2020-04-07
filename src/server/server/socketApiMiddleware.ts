@@ -1,5 +1,6 @@
 // Packages
 import * as SocketIO from 'socket.io';
+import * as Sentry from '@sentry/node';
 
 // Ours
 import createLogger from '../logger';
@@ -13,6 +14,14 @@ export default async function(socket: TypedServerSocket, next: SocketIO.NextFunc
 
 		// Prevent console warnings when many extensions are installed
 		(socket as any).setMaxListeners(64);
+
+		socket.on('error', err => {
+			if (global.sentryEnabled) {
+				Sentry.captureException(err);
+			}
+
+			log.error(err);
+		});
 
 		socket.on('message', data => {
 			log.trace(

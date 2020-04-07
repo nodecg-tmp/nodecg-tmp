@@ -68,11 +68,12 @@ test.serial('regenerating a token should send the user back to /login', async t 
 
 test.serial('token invalidation should show an UnauthorizedError on open pages', async t => {
 	await logIn();
-	const page = await initGraphic();
-	await page.evaluate(() => {
+	const dash = await initDashboard();
+	const graphic = await initGraphic();
+	await dash.evaluate(() => {
 		window.socket.emit('regenerateToken');
 	});
-	await page.waitForFunction(
+	await graphic.waitForFunction(
 		validUrl => location.href.startsWith(validUrl),
 		{},
 		`${C.rootUrl()}authError?code=token_invalidated`,

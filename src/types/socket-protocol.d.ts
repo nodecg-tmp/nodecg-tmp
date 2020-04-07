@@ -38,7 +38,7 @@ export interface ProtocolDefinition extends ServerDefinition {
 		'/': SimpleNamespace<{
 			// messages the server may send to the clients
 			ServerMessages: {
-				error: ProtocolError;
+				protocol_error: ProtocolError;
 				'graphic:bundleRefresh': string;
 				'graphic:refreshAll': string;
 				'graphic:refresh': string;
