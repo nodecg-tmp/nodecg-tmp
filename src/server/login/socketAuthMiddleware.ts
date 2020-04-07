@@ -7,7 +7,9 @@ import { isSuperUser, findUser } from '../database/utils';
 import { config } from '../config';
 import UnauthorizedError from '../login/UnauthorizedError';
 import { TypedServerSocket, UnAuthErrCode } from '../../types/socket-protocol';
+import createLogger from '../logger';
 
+const log = createLogger('socket-auth');
 const socketsByKey = new Map<string, Set<TypedServerSocket>>();
 
 export default async function(socket: TypedServerSocket, next: SocketIO.NextFunction): Promise<void> {
@@ -71,7 +73,11 @@ export default async function(socket: TypedServerSocket, next: SocketIO.NextFunc
 						await database.manager.save(newApiKey);
 
 						// Remove the old key from the user, replace it with the new
-						const user = keyToDelete.user;
+						const user = await findUser(keyToDelete.user.id);
+						if (!user) {
+							throw new Error('should have been a user here');
+						}
+
 						user.apiKeys = user.apiKeys.filter(ak => {
 							return ak.secret_key !== token;
 						});
@@ -113,6 +119,7 @@ export default async function(socket: TypedServerSocket, next: SocketIO.NextFunc
 
 					socketsByKey.delete(token);
 				} catch (error) {
+					log.error(error);
 					if (cb) {
 						cb(error);
 					}
