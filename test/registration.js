@@ -45,28 +45,6 @@ test('singleInstance - scripts get injected into /instance/*.html routes', async
 	t.true(response.data.includes('<script src="/socket.io/socket.io.js"></script>'));
 });
 
-test.cb(
-	"singleInstance - shouldn't enter an infinite redirect loop when including a polymer element that loads an external stylesheet",
-	t => {
-		const registration = require('../lib/graphics/registration');
-
-		function cb(url) {
-			if (url === '/bundles/test-bundle/graphics/single_instance.html') {
-				throw new Error('The graphic must have gotten redirected.');
-			}
-		}
-
-		process.nextTick(() => {
-			registration.once('graphicAvailable', cb);
-		});
-
-		setTimeout(() => {
-			registration.removeListener('graphicAvailable', cb);
-			t.end();
-		}, 5000);
-	},
-);
-
 test.serial('singleInstance - should redirect to busy.html when the instance is already taken', async t => {
 	t.plan(0);
 	const page = await initSingleInstance();
