@@ -8,4 +8,7 @@ export default {
 		test: 'true',
 		NODECG_TEST: 'true',
 	},
+	compileEnhancements: false,
+	extensions: ['ts'],
+	require: ['ts-node/register'],
 };

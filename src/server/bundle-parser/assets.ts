@@ -1,4 +1,4 @@
-export default function(manifest: NodeCG.Manifest): NodeCG.Bundle.AssetCategory[] {
+export default function(manifest: Pick<NodeCG.Manifest, 'assetCategories' | 'name'>): NodeCG.Bundle.AssetCategory[] {
 	if (manifest.assetCategories) {
 		if (!Array.isArray(manifest.assetCategories)) {
 			throw new Error(`${manifest.name}'s nodecg.assetCategories is not an Array`);
