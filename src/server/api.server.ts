@@ -109,6 +109,7 @@ export default (io: RootNS, replicator: Replicator, extensions: { [k: string]: u
 
 		constructor(bundle: NodeCG.Bundle) {
 			super(bundle);
+			apiContexts.add(this);
 			io.on('connection', socket => {
 				socket.on('message', (data, ack) => {
 					const wrappedAck = _wrapAcknowledgement(ack);

@@ -61,6 +61,7 @@ export class NodeCGAPIClient extends NodeCGAPIBase {
 
 	constructor(bundle: NodeCG.Bundle & { _hasSounds?: boolean }, socket: TypedClientSocket) {
 		super(bundle);
+		apiContexts.add(this);
 
 		// If title isn't set, set it to the bundle name
 		document.addEventListener(
@@ -326,6 +327,15 @@ export class NodeCGAPIClient extends NodeCGAPIBase {
 		}
 
 		window.createjs.Sound.stop();
+	}
+
+	sendMessageToBundle(messageName: string, bundleName: string, data?: unknown, cb?: SendMessageCb): void {
+		this.log.trace('Sending message %s to bundle %s with data:', messageName, bundleName, data);
+		return NodeCGAPIClient.sendMessageToBundle(messageName, bundleName, data, cb as any);
+	}
+
+	sendMessage(messageName: string, data: unknown, cb?: SendMessageCb): void {
+		return this.sendMessageToBundle(messageName, this.bundleName, data, cb);
 	}
 
 	protected _replicantFactory = <T>(

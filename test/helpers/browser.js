@@ -8,6 +8,7 @@ import { v4 as uuid } from 'uuid';
 // Packages
 import test from 'ava';
 import puppeteer from 'puppeteer';
+import { argv } from 'yargs';
 
 // Ours
 import * as C from './test-constants';
@@ -21,7 +22,7 @@ export const setup = () => {
 		// The --no-sandbox flag is required to run Headless Chrome on Travis
 		const args = IS_TRAVIS ? ['--no-sandbox'] : undefined;
 		browser = await puppeteer.launch({
-			headless: true,
+			headless: !argv.debugTests,
 			args,
 		});
 	});
@@ -59,7 +60,11 @@ export const setup = () => {
 		}
 		/* eslint-enable no-await-in-loop */
 
-		await browser.close();
+		if (argv.debugTests) {
+			await sleep(99999999);
+		} else {
+			await browser.close();
+		}
 	});
 	test.beforeEach(t => {
 		t.context.browser = browser;

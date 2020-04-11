@@ -166,44 +166,45 @@ test.serial.cb('should prevent acknowledgements from being called more than once
 	}
 });
 
-test.serial.cb('server - should support intra-context messaging', t => {
-	t.plan(2);
-
+test.serial('server - should support intra-context messaging', async t => {
 	let assertCount = 0;
-	(async () => {
-		// This is what we're actually testing.
-		t.context.apis.extension.listenFor('serverToServer', data => {
-			t.deepEqual(data, { foo: 'bar' });
-			if (++assertCount === 2) {
-				t.end();
-			}
-		});
-
-		// But, we also make sure that the client (browser) is still getting these messages as normal.
-		await dashboard.evaluate(() => {
-			window.dashboardApi.listenFor('serverToServer', data => {
-				window._serverToServerData = data;
-			});
-		});
-
-		// Send the message only after both listeners have been set up.
-		t.context.apis.extension.sendMessage('serverToServer', { foo: 'bar' });
-
-		// Wait until the browser has received the message.
-		await dashboard.waitForFunction(async () => {
-			const data = window._serverToServerData;
-			return typeof data === 'object' && Object.keys(data).length > 0;
-		});
-
-		// Verify that the browser got the right data along with the message.
-		const response = await dashboard.evaluate(() => {
-			return window._serverToServerData;
-		});
-		t.deepEqual(response, { foo: 'bar' });
+	const incrementAssert = () => {
 		if (++assertCount === 2) {
-			t.end();
+			t.pass();
 		}
-	})();
+	};
+
+	t.plan(3);
+
+	// This is what we're actually testing.
+	t.context.apis.extension.listenFor('serverToServer', data => {
+		t.deepEqual(data, { foo: 'bar' });
+		incrementAssert();
+	});
+
+	// But, we also make sure that the client (browser) is still getting these messages as normal.
+	await dashboard.evaluate(() => {
+		window.dashboardApi.listenFor('serverToServer', data => {
+			console.log('got message:', data);
+			window._serverToServerData = data;
+		});
+	});
+
+	// Send the message only after both listeners have been set up.
+	t.context.apis.extension.sendMessage('serverToServer', { foo: 'bar' });
+
+	// Wait until the browser has received the message.
+	await dashboard.waitForFunction(async () => {
+		const data = window._serverToServerData;
+		return typeof data === 'object' && Object.keys(data).length > 0;
+	});
+
+	// Verify that the browser got the right data along with the message.
+	const response = await dashboard.evaluate(() => {
+		return window._serverToServerData;
+	});
+	t.deepEqual(response, { foo: 'bar' });
+	incrementAssert();
 });
 
 test.serial.cb('client - should support intra-context messaging', t => {
