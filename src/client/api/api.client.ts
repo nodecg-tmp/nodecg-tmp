@@ -42,7 +42,7 @@ export class NodeCGAPIClient extends NodeCGAPIBase {
 	}
 
 	get config(): typeof filteredConfig {
-		return JSON.parse(JSON.stringify(filteredConfig));
+		return Object.freeze(JSON.parse(JSON.stringify(filteredConfig)));
 	}
 
 	readonly socket: TypedClientSocket;

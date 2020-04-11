@@ -20,7 +20,7 @@ test.serial("should produce an error if a callback isn't given", t => {
 		t.context.apis.extension.listenFor('testMessageName', 'test');
 	}, Error);
 
-	t.is(error.message, 'argument "handler" must be a function, but you provided a(n) string');
+	t.is(error.message, 'argument "handler" must be a function, but you provided a(n) undefined');
 });
 
 // Check for basic connectivity. The rest of the tests are run from the dashboard as well.
