@@ -11,6 +11,7 @@ import appRootPath from 'app-root-path';
 import { config } from '../config';
 import BundleManager from '../bundle-manager';
 import { authCheck, pjson } from '../util';
+import { NodeCG } from '../../types/nodecg';
 
 const VIEWS_PATH = path.join(appRootPath.path, 'src/server/util');
 const baseSentryConfig = {

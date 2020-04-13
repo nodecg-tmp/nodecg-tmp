@@ -2,6 +2,9 @@
 import * as fs from 'fs';
 import * as path from 'path';
 
+// Ours
+import { NodeCG } from '../../types/nodecg';
+
 export default function(
 	bundlePath: string,
 	manifest: NodeCG.Manifest,

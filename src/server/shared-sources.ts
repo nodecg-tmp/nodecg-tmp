@@ -6,6 +6,7 @@ import express from 'express';
 
 // Ours
 import { authCheck, sendFile } from './util';
+import { NodeCG } from '../types/nodecg';
 
 export default class SharedSourcesLib {
 	app = express();

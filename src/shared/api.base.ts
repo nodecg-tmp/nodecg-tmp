@@ -1,7 +1,8 @@
 // Ours
 // @ts-ignore
 const { version } = require('../../package.json');
-import { AbstractReplicant, Options } from './replicants.shared';
+import { AbstractReplicant } from './replicants.shared';
+import { NodeCG } from '../types/nodecg';
 
 export type AbstractLogger = {
 	name: string;
@@ -60,7 +61,7 @@ export abstract class NodeCGAPIBase {
 	protected abstract readonly _replicantFactory: <T>(
 		name: string,
 		namespace: string,
-		opts: Options<T>,
+		opts: NodeCG.Replicant.Options<T>,
 	) => AbstractReplicant<T>;
 
 	/**
@@ -273,9 +274,13 @@ export abstract class NodeCGAPIBase {
 	 * myRep.value = {objects: {can: {be: 'nested!'}}};
 	 * myRep.value = ['Even', 'arrays', 'work!'];
 	 */
-	Replicant<T>(name: string, namespace: string, opts?: Options<T>): AbstractReplicant<T>;
-	Replicant<T>(name: string, opts?: Options<T>): AbstractReplicant<T>;
-	Replicant<T>(name: string, namespaceOrOpts?: string | Options<T>, opts?: Options<T>): AbstractReplicant<T> {
+	Replicant<T>(name: string, namespace: string, opts?: NodeCG.Replicant.Options<T>): AbstractReplicant<T>;
+	Replicant<T>(name: string, opts?: NodeCG.Replicant.Options<T>): AbstractReplicant<T>;
+	Replicant<T>(
+		name: string,
+		namespaceOrOpts?: string | NodeCG.Replicant.Options<T>,
+		opts?: NodeCG.Replicant.Options<T>,
+	): AbstractReplicant<T> {
 		let namespace: string;
 		if (typeof namespaceOrOpts === 'string') {
 			namespace = namespaceOrOpts;

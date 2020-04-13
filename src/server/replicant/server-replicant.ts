@@ -9,16 +9,10 @@ import schemaDefaults from 'json-schema-defaults';
 import sha1 from 'sha1';
 
 // Ours
-import {
-	Operation,
-	proxyRecursive,
-	Options,
-	ignoreProxy,
-	resumeProxy,
-	AbstractReplicant,
-} from '../../shared/replicants.shared';
+import { proxyRecursive, ignoreProxy, resumeProxy, AbstractReplicant } from '../../shared/replicants.shared';
 import replaceRefs from './schema-hacks';
 import createLogger from '../logger';
+import { NodeCG } from '../../types/nodecg';
 
 // Never instantiate this directly.
 // Always use Replicator.declare instead.
@@ -49,7 +43,12 @@ export default class ServerReplicant<T> extends AbstractReplicant<T> {
 		});
 	}
 
-	constructor(name: string, namespace: string, opts: Options<T> = {}, startingValue: T | undefined = undefined) {
+	constructor(
+		name: string,
+		namespace: string,
+		opts: NodeCG.Replicant.Options<T> = {},
+		startingValue: T | undefined = undefined,
+	) {
 		super(name, namespace, opts);
 
 		this.log = createLogger(`Replicant/${namespace}.${name}`);
@@ -117,7 +116,7 @@ export default class ServerReplicant<T> extends AbstractReplicant<T> {
 	 * Refer to the abstract base class' implementation for details.
 	 * @private
 	 */
-	_addOperation(operation: Operation<T>): void {
+	_addOperation(operation: NodeCG.Replicant.Operation<T>): void {
 		this._operationQueue.push(operation);
 		if (!this._pendingOperationFlush) {
 			this._oldValue = clone(this.value);

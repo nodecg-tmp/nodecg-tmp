@@ -10,7 +10,7 @@ import { filteredConfig } from './config';
 import { Logger } from './logger';
 import * as ncgUtils from './util';
 import { RootNS } from '../types/socket-protocol';
-import { Options as ReplicantOptions } from '../shared/replicants.shared';
+import { NodeCG } from '../types/nodecg';
 
 type Middleware = (...handlers: express.RequestHandler[]) => void;
 
@@ -144,7 +144,7 @@ export default (io: RootNS, replicator: Replicator, extensions: { [k: string]: u
 			return replicant.value;
 		}
 
-		static Replicant<T>(name: string, namespace: string, opts: ReplicantOptions<T>): ServerReplicant<T> {
+		static Replicant<T>(name: string, namespace: string, opts: NodeCG.Replicant.Options<T>): ServerReplicant<T> {
 			if (!name || typeof name !== 'string') {
 				throw new Error('Must supply a name when reading a Replicant');
 			}
@@ -290,7 +290,7 @@ export default (io: RootNS, replicator: Replicator, extensions: { [k: string]: u
 		protected _replicantFactory = <T>(
 			name: string,
 			namespace: string,
-			opts: ReplicantOptions<T>,
+			opts: NodeCG.Replicant.Options<T>,
 		): ServerReplicant<T> => {
 			return replicator.declare(name, namespace, opts);
 		};

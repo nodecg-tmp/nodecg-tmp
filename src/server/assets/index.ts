@@ -14,6 +14,7 @@ import { authCheck, debounceName, sendFile } from '../util';
 import createLogger from '../logger';
 import Replicator from '../replicant/replicator';
 import ServerReplicant from '../replicant/server-replicant';
+import { NodeCG } from '../../types/nodecg';
 
 type Collection = {
 	name: string;

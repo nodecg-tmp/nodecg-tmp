@@ -8,6 +8,7 @@ import { EventEmitter } from 'events';
 
 // Ours
 import { LoggerInterface } from './logger-interface';
+import { NodeCG } from '../types/nodecg';
 
 /**
  * If you're wondering why some things are prefixed with "_",
@@ -22,7 +23,7 @@ export abstract class AbstractReplicant<T> extends EventEmitter {
 
 	namespace: string;
 
-	opts: Options<T>;
+	opts: NodeCG.Replicant.Options<T>;
 
 	revision = 0;
 
@@ -40,14 +41,14 @@ export abstract class AbstractReplicant<T> extends EventEmitter {
 
 	protected _oldValue: T | undefined;
 
-	protected _operationQueue: Array<Operation<T>> = [];
+	protected _operationQueue: Array<NodeCG.Replicant.Operation<T>> = [];
 
 	protected _pendingOperationFlush: boolean;
 
 	abstract get value(): T | undefined;
 	abstract set value(newValue: T | undefined);
 
-	constructor(name: string, namespace: string, opts: Options<T> = {}) {
+	constructor(name: string, namespace: string, opts: NodeCG.Replicant.Options<T> = {}) {
 		super();
 
 		if (!name || typeof name !== 'string') {
@@ -99,7 +100,7 @@ export abstract class AbstractReplicant<T> extends EventEmitter {
 	 * Adds an operation to the operation queue, to be flushed at the end of the current tick.
 	 * @private
 	 */
-	abstract _addOperation(operation: Operation<T>): void;
+	abstract _addOperation(operation: NodeCG.Replicant.Operation<T>): void;
 
 	/**
 	 * Emits all queued operations via Socket.IO & empties this._operationQueue.
@@ -111,7 +112,7 @@ export abstract class AbstractReplicant<T> extends EventEmitter {
 	 * If the operation is an array mutator method, call it on the target array with the operation arguments.
 	 * Else, handle it with objectPath.
 	 */
-	_applyOperation(operation: Operation<T>): boolean {
+	_applyOperation(operation: NodeCG.Replicant.Operation<T>): boolean {
 		ignoreProxy(this);
 
 		let result;
@@ -246,30 +247,6 @@ type Metadata<T> = {
 	path: string;
 	proxy: unknown;
 };
-
-export type Operation<T> = {
-	path: string;
-} & ( // Objects and arrays
-	| { method: 'overwrite'; args: { newValue: T | undefined } }
-	| { method: 'delete'; args: { prop: keyof T } }
-	| { method: 'add'; args: { prop: string; newValue: any } }
-	| { method: 'update'; args: { prop: string; newValue: any } }
-
-	// Array mutator methods
-	// This whole thing is gross and needs to be removed in v3
-	// It is rife with unsupported cases, very easy to make bugs here
-	| { method: 'copyWithin'; args: { prop: string; mutatorArgs: Parameters<any[]['copyWithin']> } }
-	| { method: 'fill'; args: { prop: string; mutatorArgs: Parameters<any[]['fill']> } }
-	| { method: 'pop'; args: { prop: string } }
-	| { method: 'push'; args: { prop: string; mutatorArgs: Parameters<any[]['push']> } }
-	| { method: 'reverse'; args: { prop: string } }
-	| { method: 'shift'; args: { prop: string } }
-	| { method: 'sort'; args: { prop: string; mutatorArgs: Parameters<any[]['sort']> } }
-	| { method: 'splice'; args: { prop: string; mutatorArgs: Parameters<any[]['splice']> } }
-	| { method: 'unshift'; args: { prop: string; mutatorArgs: Parameters<any[]['unshift']> } }
-);
-
-export type Options<T> = { persistent?: boolean; persistenceInterval?: number; schemaPath?: string; defaultValue?: T };
 
 export type ValidatorOptions = {
 	throwOnInvalid?: boolean;

@@ -6,5 +6,6 @@
 		"module": "commonjs",
 		"composite": true
 	},
-	"include": ["./**/*", "../types/**/*"]
+	"include": ["./**/*", "../types/stubs.d.ts"],
+	"references": [{ "path": "../types" }]
 }

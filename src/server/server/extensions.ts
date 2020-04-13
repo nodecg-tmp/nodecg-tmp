@@ -13,6 +13,7 @@ import createLogger from '../logger';
 import { Replicator } from '../replicant';
 import { RootNS } from '../../types/socket-protocol';
 import BundleManager from '../bundle-manager';
+import { NodeCG } from '../../types/nodecg';
 
 type Middleware = (...handlers: express.RequestHandler[]) => void;
 

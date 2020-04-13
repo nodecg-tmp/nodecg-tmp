@@ -1,6 +1,9 @@
 // Packages
 import * as git from 'git-rev-sync';
 
+// Ours
+import { NodeCG } from '../../types/nodecg';
+
 export default function(bundleDir: string): NodeCG.Bundle.GitData {
 	const workingDir = process.cwd();
 	let retValue: NodeCG.Bundle.GitData = null;

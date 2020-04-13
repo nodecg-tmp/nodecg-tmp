@@ -19,8 +19,8 @@ interface SocketIOConnectionEvents {
 	reconnect_failed: void;
 }
 
-declare namespace NodeCG {
-	namespace Manifest {
+export namespace NodeCG {
+	export namespace Manifest {
 		export type UnparsedAssetCategory = {
 			name: string;
 			title: string;
@@ -85,7 +85,7 @@ declare namespace NodeCG {
 	export type Manifest = Omit<PackageJSON, 'nodecg'> &
 		Manifest.UnparsedManifest & { transformBareModuleSpecifiers: boolean };
 
-	namespace Bundle {
+	export namespace Bundle {
 		export type GitData =
 			| null
 			| {
@@ -233,5 +233,36 @@ declare namespace NodeCG {
 		name: string;
 		namespace: string;
 		url: string;
+	}
+
+	export namespace Replicant {
+		export type Options<T> = {
+			persistent?: boolean;
+			persistenceInterval?: number;
+			schemaPath?: string;
+			defaultValue?: T;
+		};
+
+		export type Operation<T> = {
+			path: string;
+		} & ( // Objects and arrays
+			| { method: 'overwrite'; args: { newValue: T | undefined } }
+			| { method: 'delete'; args: { prop: keyof T } }
+			| { method: 'add'; args: { prop: string; newValue: any } }
+			| { method: 'update'; args: { prop: string; newValue: any } }
+
+			// Array mutator methods
+			// This whole thing is gross and needs to be removed in v3
+			// It is rife with unsupported cases, very easy to make bugs here
+			| { method: 'copyWithin'; args: { prop: string; mutatorArgs: Parameters<any[]['copyWithin']> } }
+			| { method: 'fill'; args: { prop: string; mutatorArgs: Parameters<any[]['fill']> } }
+			| { method: 'pop'; args: { prop: string } }
+			| { method: 'push'; args: { prop: string; mutatorArgs: Parameters<any[]['push']> } }
+			| { method: 'reverse'; args: { prop: string } }
+			| { method: 'shift'; args: { prop: string } }
+			| { method: 'sort'; args: { prop: string; mutatorArgs: Parameters<any[]['sort']> } }
+			| { method: 'splice'; args: { prop: string; mutatorArgs: Parameters<any[]['splice']> } }
+			| { method: 'unshift'; args: { prop: string; mutatorArgs: Parameters<any[]['unshift']> } }
+		);
 	}
 }

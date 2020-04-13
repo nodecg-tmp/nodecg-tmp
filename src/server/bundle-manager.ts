@@ -12,6 +12,7 @@ import semver from 'semver';
 import parseBundle from './bundle-parser';
 import parseBundleGit from './bundle-parser/git';
 import createLogger from './logger';
+import { NodeCG } from '../types/nodecg';
 
 // Start up the watcher, but don't watch any files yet.
 // We'll add the files we want to watch later, in the init() method.

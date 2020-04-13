@@ -12,6 +12,7 @@ import { config, filteredConfig } from '../config';
 import createLogger from '../logger';
 import * as ncgUtils from '../util';
 import BundleManager from '../bundle-manager';
+import { NodeCG } from '../../types/nodecg';
 
 type DashboardContext = {
 	bundles: NodeCG.Bundle[];

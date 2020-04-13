@@ -11,6 +11,7 @@ import { argv } from 'yargs';
 
 // Ours
 import { LogLevel } from '../../shared/logger-interface';
+import { NodeCG } from '../../types/nodecg';
 
 // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
 function getConfigSchema(userConfig: { [k: string]: any }) {

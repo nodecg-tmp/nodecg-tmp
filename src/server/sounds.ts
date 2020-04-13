@@ -11,6 +11,7 @@ import appRootPath from 'app-root-path';
 import { Replicator } from './replicant';
 import ServerReplicant from './replicant/server-replicant';
 import { sendFile } from './util';
+import { NodeCG } from '../types/nodecg';
 
 export default class SoundsLib {
 	app = express();

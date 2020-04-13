@@ -4,6 +4,7 @@ import path from 'path';
 // Packages
 import express from 'express';
 import { authCheck, sendFile } from './util';
+import { NodeCG } from '../types/nodecg';
 
 export default class MountsLib {
 	app = express();

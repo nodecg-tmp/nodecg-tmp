@@ -7,13 +7,13 @@ import clone from 'clone';
 
 // Ours
 import createLogger from '../logger';
-import * as shared from '../../shared/replicants.shared';
 import Replicant from './server-replicant';
 import { throttleName } from '../util';
 import ServerReplicant from './server-replicant';
 import uuid from 'uuid';
 import * as db from '../database';
 import { RootNS, TypedServerSocket, ProtocolDefinition } from '../../types/socket-protocol';
+import { NodeCG } from '../../types/nodecg';
 
 const log = createLogger('replicator');
 
@@ -57,7 +57,7 @@ export default class Replicator {
 	 * Defaults to `nodecg/bundles/${bundleName}/schemas/${replicantName}.json`.
 	 * @returns {object}
 	 */
-	declare<T>(name: string, namespace: string, opts?: shared.Options<T>): Replicant<T> {
+	declare<T>(name: string, namespace: string, opts?: NodeCG.Replicant.Options<T>): Replicant<T> {
 		// If replicant already exists, return that.
 		const nsp = this.declaredReplicants.get(namespace);
 		if (nsp) {
@@ -105,7 +105,7 @@ export default class Replicator {
 	 * @param replicant {object} - The Replicant to perform these operation on.
 	 * @param operations {array} - An array of operations.
 	 */
-	applyOperations<T>(replicant: Replicant<T>, operations: Array<shared.Operation<T>>): void {
+	applyOperations<T>(replicant: Replicant<T>, operations: Array<NodeCG.Replicant.Operation<T>>): void {
 		const oldValue = clone(replicant.value);
 		operations.forEach(operation => replicant._applyOperation(operation));
 		replicant.revision++;

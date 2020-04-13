@@ -11,6 +11,7 @@ import { Replicator } from '../replicant';
 import ServerReplicant from '../replicant/server-replicant';
 import { RootNS, GraphicRegRequest } from '../../types/socket-protocol';
 import BundleManager from '../bundle-manager';
+import { NodeCG } from '../../types/nodecg';
 
 type GraphicsInstance = {
 	ipv4: string;

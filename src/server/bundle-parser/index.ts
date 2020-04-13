@@ -12,6 +12,7 @@ import parseSounds from './sounds';
 import * as config from './config';
 import parseExtension from './extension';
 import parseGit from './git';
+import { NodeCG } from '../../types/nodecg';
 
 export default function(bundlePath: string, bundleCfgPath?: string): NodeCG.Bundle {
 	// Resolve the path to the bundle and its package.json

@@ -9,6 +9,7 @@ import semver from 'semver';
 // Ours
 import { filteredConfig } from '../config';
 import { noop } from '../util';
+import { NodeCG } from '../../types/nodecg';
 
 type Options = {
 	standalone?: boolean;

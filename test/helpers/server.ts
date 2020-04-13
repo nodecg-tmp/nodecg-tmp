@@ -1,17 +1,22 @@
-/* eslint-disable ava/no-ignored-test-files */
-
 // Native
-import * as path from 'path';
+import path from 'path';
 
 // Packages
-import test from 'ava';
-import * as fse from 'fs-extra';
-import * as temp from 'temp';
+import anyTest, { TestInterface } from 'ava';
+import fse from 'fs-extra';
+import temp from 'temp';
 
 // Ours
 import * as C from './test-constants';
+import NodeCGServer from '../../build/server/server';
+import serverApiFactory from '../../build/server/api.server';
 
-export const setup = (nodecgConfigName = 'nodecg.json') => {
+const test = anyTest as TestInterface<{
+	server: NodeCGServer;
+	apis: { extension: ReturnType<typeof serverApiFactory> };
+}>;
+
+export const setup = (nodecgConfigName = 'nodecg.json'): void => {
 	const tempFolder = temp.mkdirSync();
 	temp.track(); // Automatically track and cleanup files at exit.
 
@@ -26,8 +31,7 @@ export const setup = (nodecgConfigName = 'nodecg.json') => {
 	fse.copySync(`test/fixtures/nodecg-core/cfg/${nodecgConfigName}`, path.join(tempFolder, 'cfg/nodecg.json'));
 	fse.copySync('test/fixtures/nodecg-core/db', path.join(tempFolder, 'db'));
 
-	const NodeCGServer = require(path.resolve(__dirname, '../../build/server/server')).default;
-	let server;
+	let server: NodeCGServer;
 	test.before(async () => {
 		server = new NodeCGServer();
 		await server.start();
@@ -42,7 +46,7 @@ export const setup = (nodecgConfigName = 'nodecg.json') => {
 	test.beforeEach(t => {
 		t.context.server = server;
 		t.context.apis = {
-			extension: server.getExtensions()[C.bundleName()],
+			extension: server.getExtensions()[C.bundleName()] as any,
 		};
 	});
 };

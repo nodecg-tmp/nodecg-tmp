@@ -7,6 +7,7 @@ export default {
 	environmentVariables: {
 		test: 'true',
 		NODECG_TEST: 'true',
+		TS_NODE_PROJECT: 'test/tsconfig.json',
 	},
 	compileEnhancements: false,
 	extensions: ['ts'],

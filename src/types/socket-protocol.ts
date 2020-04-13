@@ -9,7 +9,7 @@ import {
 } from 'typed-socket.io';
 
 // Ours
-import { Operation as ReplicantOperation, Options as ReplicantOptions } from '../shared/replicants.shared';
+import { NodeCG } from './nodecg';
 
 export const enum UnAuthErrCode {
 	CredentialsBadFormat = 'credentials_bad_format',
@@ -47,7 +47,7 @@ export interface ProtocolDefinition extends ServerDefinition {
 					name: string;
 					namespace: string;
 					revision: number;
-					operations: Array<ReplicantOperation<any>>;
+					operations: Array<NodeCG.Replicant.Operation<any>>;
 				};
 				message: {
 					messageName: string;
@@ -99,7 +99,7 @@ export interface ProtocolDefinition extends ServerDefinition {
 					request: {
 						name: string;
 						namespace: string;
-						opts: ReplicantOptions<any>;
+						opts: NodeCG.Replicant.Options<any>;
 					};
 					response:
 						| {
@@ -119,15 +119,15 @@ export interface ProtocolDefinition extends ServerDefinition {
 						| {
 								name: string;
 								namespace: string;
-								operations: Array<ReplicantOperation<any>>;
-								opts: ReplicantOptions<any>;
+								operations: Array<NodeCG.Replicant.Operation<any>>;
+								opts: NodeCG.Replicant.Options<any>;
 								revision: number;
 						  }
 						| {
 								name: string;
 								namespace: string;
-								operations: Array<ReplicantOperation<any>>;
-								opts: ReplicantOptions<any>;
+								operations: Array<NodeCG.Replicant.Operation<any>>;
+								opts: NodeCG.Replicant.Options<any>;
 								revision: number;
 								schema: { [k: string]: any };
 								schemaSum: string;

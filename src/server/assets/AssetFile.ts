@@ -1,6 +1,9 @@
 // Native
 import * as path from 'path';
 
+// Ours
+import { NodeCG } from '../../types/nodecg';
+
 const ASSETS_ROOT = path.join(process.env.NODECG_ROOT, 'assets');
 
 export default class AssetFile implements NodeCG.AssetFile {

@@ -1,10 +1,8 @@
-'use strict';
-
 // Packages
-const test = require('ava');
+import test from 'ava';
 
 // Ours
-const parseBundle = require('../../lib/bundle-parser');
+import parseBundle from '../../build/server/bundle-parser';
 
 test('parsing - when the config file exists, parse the config and add it as bundle.config', t => {
 	const parsedBundle = parseBundle(

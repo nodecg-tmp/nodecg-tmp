@@ -1,12 +1,10 @@
-'use strict';
-
 // Native
-import * as fs from 'fs';
-import * as path from 'path';
+import fs from 'fs';
+import path from 'path';
 
 // Packages
 import test from 'ava';
-const fetch = require('make-fetch-happen');
+import fetch from 'make-fetch-happen';
 
 // Ours
 import * as server from './helpers/server';

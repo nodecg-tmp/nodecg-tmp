@@ -1,4 +1,7 @@
-export default function(manifest: NodeCG.Manifest): NodeCG.Bundle.Mount[] {
+// Ours
+import { NodeCG } from '../../types/nodecg';
+
+export default function(manifest: Pick<NodeCG.Manifest, 'mount' | 'name'>): NodeCG.Bundle.Mount[] {
 	const mounts: NodeCG.Bundle.Mount[] = [];
 
 	// Return early if no mounts
