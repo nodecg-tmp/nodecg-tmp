@@ -7,7 +7,7 @@ import { NodeCG } from '../../types/nodecg';
 
 export default function(
 	bundlePath: string,
-	manifest: NodeCG.Manifest,
+	manifest: Pick<NodeCG.Manifest, 'soundCues' | 'name'>,
 ): { soundCues: NodeCG.Bundle.SoundCue[]; hasAssignableSoundCues: boolean } {
 	if (!manifest.soundCues) {
 		return { soundCues: [], hasAssignableSoundCues: false };

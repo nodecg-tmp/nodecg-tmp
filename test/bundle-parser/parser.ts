@@ -1,13 +1,11 @@
-'use strict';
-
 // Native
-const path = require('path');
+import path from 'path';
 
 // Packages
-const test = require('ava');
+import test from 'ava';
 
 // Ours
-const parseBundle = require('../../lib/bundle-parser');
+import parseBundle from '../../build/server/bundle-parser';
 
 test('should error when package.json does not exist', t => {
 	const error = t.throws(parseBundle.bind(parseBundle, './test'));
@@ -31,13 +29,11 @@ test('should return the expected data when "nodecg" property does exist', t => {
 	t.is(parsedBundle.description, 'A test bundle');
 	t.is(parsedBundle.homepage, 'http://github.com/nodecg');
 	t.is(parsedBundle.author, 'Alex Van Camp <email@alexvan.camp>');
-	t.is(parsedBundle.enableCustomCues, false);
 	t.deepEqual(parsedBundle.contributors, ['Matt McNamara']);
 	t.is(parsedBundle.license, 'MIT');
 	t.is(parsedBundle.compatibleRange, '~0.7.0');
 	t.is(parsedBundle.bundleDependencies, undefined);
 	t.is(typeof parsedBundle.dir, 'string');
-	t.deepEqual(parsedBundle.dependencies, { commander: '^2.6.0' });
 	t.is(typeof parsedBundle.dashboard.dir, 'string');
 	t.deepEqual(parsedBundle.dashboard.panels, [
 		{

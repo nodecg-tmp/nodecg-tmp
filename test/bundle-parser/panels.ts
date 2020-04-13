@@ -1,10 +1,8 @@
-'use strict';
-
 // Packages
-const test = require('ava');
+import test from 'ava';
 
 // Ours
-const parseBundle = require('../../lib/bundle-parser');
+import parseBundle from '../../build/server/bundle-parser';
 
 test('when there is no "dashboard" folder, assign an empty array to bundle.dashboard.panels', t => {
 	const parsedBundle = parseBundle('./test/fixtures/bundle-parser/no-panels');

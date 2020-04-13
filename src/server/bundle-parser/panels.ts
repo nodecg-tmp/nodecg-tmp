@@ -146,7 +146,9 @@ export default function(dashboardDir: string, manifest: NodeCG.Manifest): NodeCG
 		}
 
 		const parsedPanel: NodeCG.Bundle.Panel = {
-			...panel,
+			name: panel.name,
+			title: panel.title,
+			file: panel.file,
 			...sizeInfo,
 			...workspaceInfo,
 			path: filePath,
